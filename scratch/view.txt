@@ -1,0 +1,89 @@
+def run_once_and_start_listener(self):
+        """
+        1회 점검 수행 후 백그라운드 자동 매매 스레드 및 텔레그램 리스너 상시 가동
+        """
+        print("=" * 75)
+        # 0. ⏱️ [투자 진행 전 필수 체크리스트 1번: 글로벌 시간 동기화 & 모델 스위칭 사전 검증]
+        print("\n" + "=" * 75)
+        print("⏱️  [투자 집행 전 필수 체크리스트: 글로벌 시간 동기화 & 모델 스위칭 사전 검증]  ⏱️")
+        print("=" * 75)
+        sync_res = USMarketCalendar.verify_time_synchronization()
+        for chk_item in sync_res["checklist_items"]:
+            print(f"   • {chk_item}")
+        if not sync_res["all_ok"]:
+            err_msg = "🚨 [치명적 시간 동기화 불일치] 미국 거래소 시간과 로컬 시스템 시간의 시차가 일치하지 않습니다!"
+            logger.critical(err_msg)
+            raise RuntimeError(err_msg)
+        print(f"   ➔ 🎯 시간 동기화 검증 100% 무결성 통과 ({sync_res['dst_text']})")
+        print("=" * 75)
+
+        # 1. 증시 세션 상태 판별
+        mkt_status = USMarketCalendar.get_market_status()
+        self._last_market_session = mkt_status["session_name"]
+
+        print(f"\n[1/3] 뉴욕 증시 운영 상태 점검:")
+        print(f"   • 현재 상태: {mkt_status['status_desc']}")
+        print(f"   • 한국 시각: {mkt_status['now_kst_str']}")
+        print(f"   • 뉴욕 시각: {mkt_status['now_ny_str']} ({mkt_status['dst_text']})")
+        print(f"   • 다음 개장: {mkt_status['next_open_kst_str']} (남은 시간: {mkt_status['time_until_open_str']})")
+
+        # 2. 브로커 계좌 및 토큰 연결 점검
+        print(f"\n[2/3] {self.broker.broker_name} {self.broker.mode_str} 계좌 및 토큰 연결 상태 점검:")
+        conn_res = self.broker.test_connection()
+        print(f"   • OAuth2 토큰: {'✅ 정상 발급 완료' if conn_res['ok'] else '❌ 발급 실패'}")
+        print(f"   • 연동 계좌: {self.broker.account_no}-{self.broker.account_type}")
+        print(f"   • 주문가능 외화: ${conn_res['usd_order_available']:,.2f} USD")
+        print(f"   • 원화 환산 잔고: {conn_res['krw_converted']:,}원")
+        print(f"   • 보유 주식: {conn_res['holdings_count']}개")
+
+        # 3. 텔레그램 체결 알림 및 리스너 활성화
+        print(f"\n[3/3] 텔레그램 실시간 체결 알림 및 리스너 활성화")
+        ai_engine_desc = "`Phase 1(15m) + Phase 2(5m Sniper) + 크로스에셋 Veto 방패`" if self.enable_5m_sniper else "`Phase 1: 15분봉 Model C 단일 챔피언 (승률 77.6% / PF 3.98) + 크로스에셋 Veto 방패`"
+        start_msg = f"""🏛 **[Lumos 실시간 {self.broker.mode_str} 자율 매매 시스템 가동]**
+━━━━━━━━━━━━━━━━━━━━
+⏰ **현재 시각:** `{mkt_status['now_kst_str']}`
+⏱️ **시간 동기화:** `100% 무결성 통과 (KST-NYT {sync_res['delta_hours']:.0f}h 시차 일치, 모델 스위칭 정상)`
+📊 **증시 세션:** `{mkt_status['status_desc']}`
+⏳ **정규장 개장:** `{mkt_status['next_open_kst_str']}` ({mkt_status['time_until_open_str']})
+🏛 **운용 브로커:** `{self.broker.broker_name} ({self.broker.mode_str})`
+💳 **계좌 번호:** `{self.broker.account_no}-{self.broker.account_type}`
+💵 **주문가능 외화:** `${conn_res['usd_order_available']:,.2f} USD` (약 `{conn_res['krw_converted']:,}원`)
+📦 **보유 포지션:** `{conn_res['holdings_count']}개`
+🧠 **AI 엔진:** {ai_engine_desc}
+🛡️ **일일 서킷 브레이커:** `3-Out Veto 가동 중 (당일 손절 {self.daily_stoploss_count}/3회)`
+⚡ **실시간 감시:** `10ms WebSocket 틱 스트리밍 및 이벤트 주도형 스마트 체결 대기`
+━━━━━━━━━━━━━━━━━━━━
+대표님, 이벤트 주도형 스마트 매매 엔진이 정상 가동되었습니다."""
+        try:
+            self.dispatcher.send_telegram_message(start_msg)
+            system_logger.log("INFO", "LiveRunner", f"🏛 {self.broker.mode_str} 자율 매매 엔진 가동 완료 (계좌: {self.broker.account_no}, 예수금: ${conn_res['usd_order_available']:,.2f})")
+        except Exception as te:
+            logger.warning(f"시작 알림 전송 실패: {te}")
+        
+        # 4. 실시간 웹소켓(WebSocket) 틱 스트리머 가동
+        self.ws_streamer.start()
+        print(f"⚡ [{self.broker.broker_name} 실시간 WebSocket 스트리머 가동 완료] 10ms 초고속 틱 이벤트 감시 시작")
+
+        # 5. 백그라운드 자동 매매 감시 스레드 가동
+        trd_thread = threading.Thread(target=self._market_execution_loop, daemon=True)
+        trd_thread.start()
+
+        # 6. 실시간 텔레그램 양방향 리스너 루프 실행 (Foreground Daemon)
+        self.controller.listen_loop(poll_interval=2)
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Lumos Auto Trading Live Runner")
+    parser.add_argument("--real", action="store_true", help="실전투자(REAL) 모드로 가동")
+    parser.add_argument("--sim", "--simulation", action="store_true", help="모의투자(VIRTUAL) 모드로 가동")
+    args, unknown = parser.parse_known_args()
+
+    is_sim = None
+    if args.real:
+        is_sim = False
+    elif args.sim:
+        is_sim = True
+
+    runner = KiwoomLiveRunner(is_simulation=is_sim)
+    runner.run_once_and_start_listener()

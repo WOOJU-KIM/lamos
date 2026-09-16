@@ -1,0 +1,13 @@
+order_px_1 = round(cur_px + 0.03, 2)
+
+            logger.info(f"🚀 [1차 매수 발주] {symbol} {target_qty}주 @ ${order_px_1:.2f} ({self.order_timeout_buy_sec:.0f}초 체결 대기 시작)")
+            ord_res_1 = self.broker.send_order(symbol=symbol, order_type="BUY", quantity=target_qty, price=order_px_1)
+            ord_no_1 = str(ord_res_1.get("order_no", "")).strip()
+
+            # 텔레그램 매수 알림 발송 (1회만 발송)
+            mode_title = "🧪 [키움 모의투자]" if self.broker.is_simulation else "🚨 [키움 실전투자]"
+            score_block = "\n".join([f"• **{k.upper()}:** `{v*100:.1f}점`" for k, v in sorted(all_scores.items(), key=lambda x: x[1], reverse=True)])
+            buy_msg = f"""🚀 **[{mode_title} {strategy_tag} 자율 매수 주문 전송]**
+━━━━━━━━━━━━━━━━━━━━
+📌 **운용 모드:** `{self.broker.broker_name} {self.broker.mode_str}`
+🎯 **선정 종목:** `{

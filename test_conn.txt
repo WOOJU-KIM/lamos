@@ -1,0 +1,39 @@
+def get_overseas_deposit(self) -> Dict[str, Any]:
+        """
+        [TR: ust21110] 미국/해외주식 외화예수금 조회 요청
+        - USD 외화 예수금, 외화 주문가능금액, 원화환산금액 등 반환 (5초 캐시로 429 방지)
+        """
+        now_ts = time.time()
+        if hasattr(self, "_cached_deposit") and self._cached_deposit and (now_ts - getattr(self, "_deposit_cached_time", 0)) < 5:
+            return self._cached_deposit
+
+        body = {
+            "cano": self.account_no,
+            "acnt_prdt_cd": self.account_type
+        }
+        res = self._send_tr_request(endpoint="/api/us/acnt", api_id="ust21110", body_dict=body)
+
+        if res.get("return_code") == 0:
+            usd_info = {}
+            for item in res.get("result_list", []):
+                if item.get("crnc_code") == "USD":
+                    usd_info = item
+                    break
+
+            def _parse_float(val, default=0.0):
+                try:
+                    return float(str(val).replace(",", "").strip())
+                except Exception:
+                    return default
+
+            usd_deposit = _parse_float(usd_info.get("fc_entra", 0))
+            usd_order_avail = _parse_float(usd_info.get("fc_ord_alowa", 0))
+            krw_converted = _parse_float(usd_info.get("fc_booka", 0))
+
+            dep_res = {
+                "ok": True,
+                "currency": "USD",
+                "usd_deposit": usd_deposit,
+                "usd_order_available": usd_order_avail,
+                "krw_converted": int(krw_converted),
+                "all_

@@ -1,0 +1,40 @@
+1251:                                                 "dynamic_tp_px": round(cur_px * 1.03, 2),
+1252:                                                 "dynamic_sl_px": round(cur_px * 0.98, 2),
+1253:                                                 "tp_pct": 3.0,
+1254:                                                 "sl_pct": 2.0,
+1255:                                                 "time_stop_minutes": 90,
+1256:                                                 "strategy_tag": "Lumos V3 MoE"
+1257:                                             }
+1258:                                             self._execute_buy_with_10s_chase(
+1259:                                                 symbol=winner_sym,
+1260:                                                 target_qty=order_qty,
+1261:                                                 ref_price=cur_px,
+1262:                                                 moe_res=moe_res,
+1263:                                                 targets=targets
+1264:                                             )
+1265:                         except Exception as e:
+1266:                             system_logger.log("ERROR", "AI", f"AI 스캔 중 예외 발생: {e}")
+1267:                 
+1268:                 # =========================================================================
+1269: 
+1270: 
+1271: 
+1272: 
+1273:             except Exception as e:
+1274:                 system_logger.log("ERROR", "LiveRunner", f"⚠️ 매매 감시 스레드 예외 발생: {e}")
+1275:                 print(f"⚠️ [매매 스레드 예외]: {e}")
+1276:                 time.sleep(1)
+1277: 
+1278:     def run_once_and_start_listener(self):
+1279:         """
+1280:         1회 점검 수행 후 백그라운드 자동 매매 스레드 및 텔레그램 리스너 상시 가동
+1281:         """
+1282:         print("=" * 75)
+1283:         # 0. ⏱️ [투자 진행 전 필수 체크리스트 1번: 글로벌 시간 동기화 & 모델 스위칭 사전 검증]
+1284:         print("\n" + "=" * 75)
+1285:         print("⏱️  [투자 집행 전 필수 체크리스트: 글로벌 시간 동기화 & 모델 스위칭 사전 검증]  ⏱️")
+1286:         print("=" * 75)
+1287:         sync_res = USMarketCalendar.verify_time_synchronization()
+1288:         for chk_item in sync_res["checklist_items"]:
+1289:             print(f"   • {chk_item}")
+1290:         if not sync_res["all_ok"]:

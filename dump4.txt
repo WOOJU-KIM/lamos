@@ -1,0 +1,12 @@
+def _market_execution_loop(self):
+        print("🚀 [자동 매매 스레드 가동] 증시 세션 모니터링 (주기: 15초)...")
+        system_logger.log("INFO", "LiveRunner", "실시간 자동 매매 스레드 가동 완료")
+        
+        while True:
+            try:
+                mkt = USMarketCalendar.get_market_status()
+                current_session = mkt["session_name"]
+
+                if self._last_market_session != current_session:
+                    if current_session == "REGULAR_MARKET_OPEN":
+                        self._reset_daily_circu

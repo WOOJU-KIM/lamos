@@ -1,0 +1,66 @@
+def _manage_open_positions(self, stk_bal: Dict[str, Any], realtime_px_override: Optional[Dict[str, float]] = None):
+        """
+        [100% 증권사 원장 통신 기반 보유 포지션 실시간 청산 관리]
+        - 반드시 증권사 원장에 실제 체결 입고된 수량(poss_qty > 0)이 존재할 때만 청산 계산 및 매도 발주
+        - 매수 미체결 상태에서는 절대 매도를 시도하지 않음
+        """
+        holdings = stk_bal.get("holdings", [])
+        if not holdings:
+            return
+
+        active_pos = self._get_active_position()
+        tp_threshold = float(active_pos.get("tp_pct", 3.0)) / 100.0 if (active_pos and active_pos.get("tp_pct")) else 0.030
+        sl_threshold = float(active_pos.get("sl_pct", 2.0)) / 100.0 if (active_pos and active_pos.get("sl_pct")) else 0.020
+
+        for h in holdings:
+            sym = str(h.get("symbol") or h.get("stk_cd") or "").strip().upper()
+            qty = int(float(str(h.get("quantity") or h.get("poss_qty") or h.get("sell_alowq") or 0).replace(",", "")))
+            buy_px = float(str(h.get("purchase_price") or h.get("avg_price") or h.get("frgn_stk_book_uv") or 0.0).replace(",", ""))
+
+            if not sym or qty <= 0 or buy_px <= 0:
+                continue
+
+            if realtime_px_override and sym in realtime_px_override:
+                cur_px = float(realtime_px_override[sym])
+            else:
+                quote = self.broker.get_stock_quote(sym)
+                cur_px = float(quote.get("last_price", buy_px))
+
+            if cur_px <= 0:
+                cur_px = buy_px
+
+            # 보유 중 최고가/최저가 실시간 갱신 (MFE / MAE 실측 산출용)
+            if active_pos:
+                cur_hi = active_pos.get("high_price_during_hold", cur_px)
+                cur_lo = active_pos.get("low_price_during_hold", cur_px)
+                if cur_px > cur_hi:
+                    active_pos["high_price_during_hold"] = cur_px
+                if cur_px < cur_lo:
+                    active_pos["low_price_during_hold"] = cur_px
+
+            pnl_pct = (cur_px - buy_px) / buy_px
+
+            # 1. 목표 익절
+            if pnl_pct >= tp_threshold:
+                gain_pct = pnl_pct * 100
+                self._execute_sell_with_10s_chase(
+                    symbol=sym,
+                    quantity=qty,
+                    reason_desc=f"🎯 목표 익절 (+{gain_pct:.2f}%)",
+                    buy_px=buy_px,
+                    cur_px=cur_px,
+                    is_stoploss=False
+                )
+            # 2. 칼손절 방어
+            elif pnl_pct <= -sl_threshold:
+                loss_pct = abs(pnl_pct * 100)
+                self._execute_sell_with_10s_chase(
+                    symbol=sym,
+                    quantity=qty,
+                    reason_desc=f"🛑 칼손절 방어 (-{loss_pct:.2f}%)",
+                    buy_px=buy_px,
+                    cur_px=cur_px,
+                    is_stoploss=True
+                )
+
+    
