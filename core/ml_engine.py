@@ -253,6 +253,11 @@ class MLFeatureEngine:
         except Exception as e:
             print(f"[MLFeatureEngine] 크로스에셋 병합 실패 (오프라인 모드): {e}")
 
+        if 'datetime' in df.columns:
+            df.index = pd.to_datetime(df['datetime'])
+        elif 'Datetime' in df.columns:
+            df.index = pd.to_datetime(df['Datetime'])
+            
         return df
 
     @staticmethod

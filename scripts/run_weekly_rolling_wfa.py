@@ -116,7 +116,7 @@ def run_weekly_rolling_walk_forward():
     trades = []
     trade_id = 0
     active_pos = None
-    slippage_rate = 0.0005  # 왕복 0.05%
+    slippage_rate = 0.0020  # 왕복 0.05%
 
     week_progress = 0
 

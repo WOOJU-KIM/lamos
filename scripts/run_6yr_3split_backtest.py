@@ -228,7 +228,7 @@ def step3_run_6yr_simulation(ml_engine: MLFeatureEngine):
     trades = []
     trade_id = 0
     active_pos = None
-    slippage_rate = 0.0005
+    slippage_rate = 0.0020
     
     for dt_day in unique_dates:
         day_bars = soxl_feat[soxl_feat['date_str'] == dt_day]

@@ -226,7 +226,7 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
     trades = []
     trade_id = 0
     active_pos = None
-    slippage_rate = 0.0005  # 왕복 0.05%
+    slippage_rate = 0.0020  # 왕복 0.05%
 
     unique_dates = sorted(test_df['date_str'].unique())
 

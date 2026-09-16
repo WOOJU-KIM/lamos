@@ -235,7 +235,7 @@ class KiwoomLiveRunner:
         self.data_lake = MarketDataLake()
         self.shadow_sandbox = ShadowSandboxEngine()
         self.circuit_breaker = CircuitBreakerEngine()
-        self.moe_orchestrator = MoEMetaOrchestrator(confidence_threshold=0.65, gbdt_threshold=0.65)
+        self.moe_orchestrator = MoEMetaOrchestrator(confidence_threshold=0.62, gbdt_threshold=0.62)
         self.enable_5m_sniper = False  # ? 15 ? ?? (? 77.55%, PF 3.98  / 5 ?? ? )
 #         #self.sniper_engine = PowerHourSniper(
 #             tp_pct=0.025,
@@ -651,13 +651,8 @@ class KiwoomLiveRunner:
             self._is_order_in_progress = True
 
         try:
-            # ??[? ? ?  ??
-            if self.daily_circuit_breaker_triggered or self.daily_stoploss_count >= 3:
-                logger.warning(f"? [ ?] ? ? ?  ?({self.daily_stoploss_count}/3???? ??????")
-                return False
-
             if target_qty <= 0:
-                logger.warning(f"? [ ?] ??? ??  ?({target_qty}?? ??????")
+                logger.warning(f"⚠️ [매수 거부] 비정상 타겟 수량({target_qty}주)으로 진입이 취소되었습니다.")
                 return False
 
             exp_name = moe_res.get("expert_desc", "MoE Gating")
@@ -1098,7 +1093,7 @@ class KiwoomLiveRunner:
                         self.ws_streamer.reset_session_ticks()
                         
                         system_logger.log("TRADE", "MarketSession", f"??? ?? ? ? ({mkt['now_kst_str']})")
-                        open_msg = f"""? **[  ??? ?]**\n\n??? ?: `{mkt['now_kst_str']}`\n?  : `{self.broker.mode_str}`\n? AI ?? `???MoE V3 (09:30~15:30 EDT)`\n? : `GBDT 65% ?`\n? ?: `+3.0% / -2.0% / 90?????\n????: `15:50 EDT 0% ?? ? ???\n? ? ?: `3-Out ? ? ?????"""
+                        open_msg = f"""🔥 **[정규장 매매 개시]**\n\n⏰ 현재 시각: `{mkt['now_kst_str']}`\n🖥️ 실행 모드: `{self.broker.mode_str}`\n🧠 AI 전략: `하이브리드 MoE V3 (09:30~15:30 EDT)`\n🎯 매수 룰: `GBDT 62% 이상`\n🛡️ 청산 룰: `Max TP +3.5% / ATR Trailing Stop`\n🌙 마감청산: `15:50 EDT 0% 오버나잇 전량 시장가`"""
                         self.dispatcher.send_telegram_message(open_msg)
 
                     elif current_session in ["AFTER_MARKET_CLOSED", "CLOSED"]:

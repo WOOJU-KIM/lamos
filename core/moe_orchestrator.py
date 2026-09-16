@@ -42,9 +42,9 @@ class MoEMetaOrchestrator:
     """
     def __init__(
         self,
-        confidence_threshold: float = 0.65,
+        confidence_threshold: float = 0.62,
         cross_asset_threshold: float = 0.60,
-        gbdt_threshold: float = 0.65,
+        gbdt_threshold: float = 0.62,
         mode: str = "hybrid_v3"
     ):
         self.confidence_threshold = confidence_threshold
@@ -214,9 +214,10 @@ class MoEMetaOrchestrator:
         c = df_candle_15m['close'] if 'close' in df_candle_15m else df_candle_15m['Close']
         ret_5 = float((c.iloc[-1] / c.iloc[-5] - 1.0)) if len(c) >= 5 else 0.0
 
-        # 2. [크로스에셋: 방향성 검토 폐지 (GBDT Feature로 완전 통합됨)]
+        # 2. [크로스에셋: 방향성 검토 (역풍 방패 Veto)]
         dir_cross = "NONE"
         conf_cross = 0.50
+        is_cross_veto = False
         def _get_live_df(sym, default_dt):
             lp = live_prices.get(sym, 0.0) if live_prices else 0.0
             if lp > 0:
@@ -225,32 +226,65 @@ class MoEMetaOrchestrator:
                 return self.data_lake.load_candles(sym, "15m", end_dt=current_time_str)
             return self.data_lake.load_candles(sym, "15m")
 
+        try:
+            def _get_c(sym):
+                df = _get_live_df(sym, current_time_str)
+                if df is None or df.empty: return pd.Series()
+                return df['Close'] if 'Close' in df else df['close']
+            
+            n_c = _get_c("NVDA")
+            q_c = _get_c("QQQ")
+            v_c = _get_c("VIX")
+            s_c = _get_c("SOXL")
+            soxx_c = _get_c("SOXX")
+            
+            if len(n_c) >= 5 and len(q_c) >= 5 and len(v_c) >= 5 and len(s_c) >= 5:
+                nvda_r = float(n_c.iloc[-1] / n_c.iloc[-5] - 1.0)
+                qqq_r = float(q_c.iloc[-1] / q_c.iloc[-5] - 1.0)
+                vix_r = float(v_c.iloc[-1] / v_c.iloc[-5] - 1.0)
+                soxx_r = float(soxx_c.iloc[-1] / soxx_c.iloc[-5] - 1.0) if not soxx_c.empty else nvda_r
+                soxl_r = float(s_c.iloc[-1] / s_c.iloc[-5] - 1.0)
+
+                sig_code, exp_conf, _ = getattr(self, "cross_asset_model", self).predict_signal(
+                    soxl_ret=soxl_r, nvda_ret=nvda_r, soxx_ret=soxx_r, qqq_ret=qqq_r, vix_ret=vix_r, tnx_ret=0.0
+                ) if hasattr(self, "cross_asset_model") else (0, 0.5, "")
+                
+                conf_cross = exp_conf
+                if sig_code > 0: dir_cross = "LONG_SOXL"
+                elif sig_code < 0: dir_cross = "SHORT_SOXS"
+        except Exception as e:
+            print("CROSS_ASSET EXCEPTION:", e)
+            pass
+
         # 3. [GBDT 3-Class 파형 스나이퍼 모델 신호 및 확신도 계산]
         dir_gbdt = "NONE"
         conf_gbdt = 0.50
         try:
             live_soxl_15m = _get_live_df("SOXL", current_time_str) if "live_prices" in locals() else df_candle_15m
-            gbdt_sig, gbdt_conf, _ = self.gbdt_engine.predict_signal(live_soxl_15m)
+            gbdt_sig, gbdt_conf, _ = self.gbdt_engine.predict_signal(live_soxl_15m, live_prices=live_prices)
             conf_gbdt = gbdt_conf
             if gbdt_sig == 1:
                 dir_gbdt = "LONG_SOXL"
             elif gbdt_sig == -1:
                 dir_gbdt = "SHORT_SOXS"
-            else:
-                dir_gbdt = "NONE"
         except Exception:
             pass
 
+        is_cross_veto = (
+            (dir_gbdt == "LONG_SOXL" and dir_cross == "SHORT_SOXS") or
+            (dir_gbdt == "SHORT_SOXS" and dir_cross == "LONG_SOXL")
+        )
+
         # 4. [MoE 의사결정 집행]
-        cross_hurdle = self.cross_asset_threshold  # 0.60
-        gbdt_hurdle = threshold if threshold is not None else self.gbdt_threshold  # 0.60
+        cross_hurdle = getattr(self, "cross_asset_threshold", 0.60)
+        gbdt_hurdle = threshold if threshold is not None else getattr(self, "gbdt_threshold", 0.62)
 
         if getattr(self, "mode", "hybrid_v3") == "hybrid_v3":
             # -----------------------------------------------------------------
-            # [Lumos V3 하이브리드 MoE 의사결정 (SOXL/SOXS 롱·숏 양방향 동일 적용)]
+            # [Lumos V3 하이브리드 MoE 의사결정]
             # - 조건 A (공격수): GBDT가 SOXL 또는 SOXS 방향 제시 및 확신도 >= gbdt_hurdle (0.62)
-            # - 방패(Veto): 폐지 (Feature로 통합됨)
-            # - 멀티스크린 필터: 폐지 (GBDT >= 62% 시 즉각 진입)
+            # - 방패(Veto): 크로스에셋 역방향 검출 시 진입 차단 (Veto)
+            # - 멀티스크린 필터: SOXX 60분봉 추세 및 5분봉 RSI 눌림목 확인
             # -----------------------------------------------------------------
             is_gbdt_trigger = (dir_gbdt in ["LONG_SOXL", "SHORT_SOXS"]) and (conf_gbdt >= gbdt_hurdle)
 
@@ -282,16 +316,41 @@ class MoEMetaOrchestrator:
                 direction = "NONE"
                 final_conf = max(conf_cross, conf_gbdt)
 
-        # 5. [3중 스크린 검증] - 완전히 폐지됨 (GBDT Feature로 흡수)
+        # 5. [3중 스크린 검증] - SOXX 60분봉 추세 및 5m 눌림목
         is_60m_trend_ok = True
+        try:
+            soxx_live = live_prices.get("SOXX", 0.0) if live_prices else 0.0
+            if soxx_live > 0:
+                soxx_60m = self.data_lake.get_candles_with_live_tick("SOXX", "60m", live_price=soxx_live)
+            else:
+                soxx_60m = self.data_lake.load_candles("SOXX", "60m")
+                
+            if not soxx_60m.empty and len(soxx_60m) >= 20:
+                s_c = soxx_60m['Close'] if 'Close' in soxx_60m else soxx_60m['close']
+                soxx_c = s_c.iloc[-1]
+                soxx_ema = s_c.ewm(span=20, adjust=False).mean().iloc[-1]
+                if direction == "LONG_SOXL":
+                    is_60m_trend_ok = (soxx_c >= soxx_ema * 0.998)
+                elif direction == "SHORT_SOXS":
+                    is_60m_trend_ok = (soxx_c <= soxx_ema * 1.002)
+        except Exception:
+            pass
+
+        df_feat = getattr(self, "gbdt_engine", self).extract_features(df_candle_15m, live_prices=live_prices) if hasattr(self, "gbdt_engine") else df_candle_15m
+        last_row = df_feat.iloc[-1] if not df_feat.empty else {}
+
         dip_ok = True
-        
-        df_feat = self.gbdt_engine.extract_features(df_candle_15m)
-        last_row = df_feat.iloc[-1]
+        try:
+            rsi_5m = float(last_row.get("RSI_14", 50.0))
+            if direction == "LONG_SOXL" and rsi_5m > 68.0:
+                dip_ok = False
+            elif direction == "SHORT_SOXS" and rsi_5m < 32.0:
+                dip_ok = False
+        except Exception:
+            pass
 
         # 6. [최종 매수 승인]
-        # GBDT 방향만 확정되면 즉시 승인 (Veto 및 Screen 필터 영구 삭제)
-        is_approved = bool(direction in ['LONG_SOXL', 'SHORT_SOXS'])
+        is_approved = bool(direction in ['LONG_SOXL', 'SHORT_SOXS'] and not is_cross_veto and is_60m_trend_ok and dip_ok)
         all_confidences = {
             "cross_asset": round(conf_cross, 4),
             "gbdt_pattern": round(conf_gbdt, 4)
@@ -327,8 +386,8 @@ class MoEMetaOrchestrator:
 
         return decision_meta
 
-def train_and_save_moe_orchestrator(confidence_threshold: float = 0.65, mode: str = "hybrid_v3") -> MoEMetaOrchestrator:
-    """듀얼 챔피언 오케스트레이터 모델 인스턴스 빌드 및 저장 (하이브리드 V3 + 레거시 안전 모델 동시 저장)"""
+def train_and_save_moe_orchestrator(confidence_threshold: float = 0.62, mode: str = "hybrid_v3") -> MoEMetaOrchestrator:
+    print(f"🚀 [훈련 개시] Lumos 듀얼 챔피언 MoE 스나이퍼 학습 중... (임계값 {confidence_threshold*100:.0f}%)")
     orchestrator = MoEMetaOrchestrator(confidence_threshold=confidence_threshold, gbdt_threshold=confidence_threshold, mode=mode)
     data_lake = MarketDataLake()
     soxl_15m = data_lake.load_candles("SOXL", "15m")

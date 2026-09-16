@@ -162,7 +162,7 @@ def run_final_optimal_wfa():
     current_capital  = initial_capital
     peak_capital     = initial_capital
     max_drawdown_pct = 0.0
-    trades = []; trade_id = 0; slippage_rate = 0.0005
+    trades = []; trade_id = 0; slippage_rate = 0.0020
 
     for d_str in sorted(test_df['date_str'].unique()):
         day_bars_15 = test_df[test_df['date_str'] == d_str].reset_index(drop=True)

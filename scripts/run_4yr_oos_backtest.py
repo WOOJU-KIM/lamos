@@ -244,7 +244,7 @@ def step3_run_4yr_simulation(ml_engine: MLFeatureEngine):
     trade_id = 0
     active_pos = None  # {'sym': 'SOXL', 'entry_px': float, 'entry_dt': str, 'bars': int}
     
-    slippage_rate = 0.0005  # 왕복 0.05% 슬리피지/수수료
+    slippage_rate = 0.0020  # 왕복 0.05% 슬리피지/수수료
     
     for dt_day in unique_dates:
         day_bars = soxl_feat[soxl_feat['date_str'] == dt_day]

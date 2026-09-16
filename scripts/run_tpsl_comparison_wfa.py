@@ -28,7 +28,7 @@ from core.ml_engine import MLFeatureEngine
 CONF = 0.62
 INIT_CAP = 10_000_000.0
 ROLL_WKS = 104
-SLIP = 0.0005
+SLIP = 0.0020
 HORIZON = 6
 CUT_ENTRY = "14:30"
 CUT_EOD   = "15:45"
