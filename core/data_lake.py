@@ -292,7 +292,7 @@ class MarketDataLake:
         results = {}
         total_inserted = 0
 
-        print("⏳ [7종 심볼 콜드스타트 수집 시작] SOXL, SOXS, SOXX, QQQ, NVDA, ^VIX, ^TNX...")
+        print("⏳ [7종 심볼 콜드스타트 수집 시작] SOXL, SOXS, SOXX, QQQ, NVDA, VIXY, IEF...")
         for sym in ALL_SYMBOLS:
             for tf in TIMEFRAMES:
                 try:
@@ -572,25 +572,31 @@ class DailyAutoPipeline:
                 exec_lines.append(f"  • **[{sym} {side}]** `{qty}주` @ `${float(px):.2f}`")
             exec_block = "\n".join(exec_lines)
         else:
-            exec_block = "  • **매매 내역:** `금일 체결 없음 (듀얼 합의 미충족으로 100% 현금 보존)`"
+            exec_block = "  • **매매 내역:** `금일 체결 없음 (GBDT 확신도 65% 미달로 100% 현금 보존)`"
 
         pnl_sign = "+" if realized_pnl >= 0 else ""
         pnl_str = f"{pnl_sign}${realized_pnl:.2f} USD ({pnl_sign}{realized_rate:.2f}%)" if realized_pnl != 0.0 else "$0.00 USD (오버나잇 0% 현금화)"
 
+
+        from zoneinfo import ZoneInfo
+        from datetime import datetime
+        if datetime.now().astimezone(ZoneInfo('Asia/Seoul')).weekday() == 5:
+            retrain_text = "🧠 **[2. AI 모델 최신 기간 롤링 재학습 완료]**\n• **재학습 모델:** `GBDT 롤링 최신화 모델 (Rolling Retrained)`\n• **최신 데이터 반영:** `금일 정규장 마감 캔들까지 전량 학습 반영 완료`"
+        else:
+            retrain_text = "🧠 **[2. AI 모델 최신 기간 롤링 재학습 대기]**\n• **상태:** `평일 데이터 적재 완료 (재학습 미수행)`\n• **안내:** `과적합 방지를 위해 재학습은 매주 주말(토) 1회만 일괄 수행됩니다.`"
+
         # 3️⃣ [3. 장 마감 후 데이터 백업, 최신 재학습, 거래 요약 일일 결산 보고서]
-        msg = f"""🌙 **[Lumos 정규장 마감 EOD 일일 종합 결산 보고서 (정정)]**
+        msg = f"""🌙 **[Lumos 정규장 마감 EOD 일일 종합 결산 보고서]**
 ━━━━━━━━━━━━━━━━━━━━
 ⏰ **결산 시각:** `{mkt['now_kst_str']}`
 🏛 **연동 계좌:** `{cano}` ({broker.mode_str})
 💱 **적용 환율:** `{exrt:,.2f} KRW/USD`
 
 📦 **[1. 일일 시장 데이터 백업 완료]**
-• **대상 심볼:** `SOXL, SOXS, NVDA, QQQ, SOXX, ^VIX, ^TNX (7종)`
+• **대상 심볼:** `SOXL, SOXS, NVDA, QQQ, SOXX, VIXY, IEF (7종)`
 • **적재 타임프레임:** `5분봉 / 15분봉 / 60분봉 전수 DB 백업 완료`
 
-🧠 **[2. AI 모델 최신 기간 롤링 재학습 완료]**
-• **재학습 모델:** `GBDT 롤링 최신화 모델 (Rolling Retrained)`
-• **최신 데이터 반영:** `금일 정규장 마감 캔들까지 전량 학습 반영 완료`
+{retrain_text}
 
 💰 **[3. 키움증권 공식 원장 잔고]**
 • **총 평가 자산:** `${total_eval_usd:,.2f} USD` (`₩{total_eval_krw:,}원`)

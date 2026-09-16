@@ -1158,7 +1158,14 @@ class KiwoomLiveRunner:
                             is_appr = moe_res.get('is_approved', False)
                             direction = moe_res.get('direction', 'NONE')
                             
-                            briefing_msg = "AI Briefing"
+                            dir_str = "매수 대기" if direction == "NONE" else direction
+                            briefing_msg = f"""🤖 <b>[Lumos AI 정기 브리핑]</b>
+• <b>시간</b>: {now_dt.strftime('%H:%M')} (KST)
+• <b>AI 판독 방향</b>: {dir_str}
+• <b>GBDT 확신도</b>: {conf:.1f}%
+• <b>VIXY</b>: {live_prices.get('VIXY', 0.0):.2f} / <b>IEF</b>: {live_prices.get('IEF', 0.0):.2f}
+• <b>상태</b>: {'진입 승인 🚀' if is_appr else '관망 중 👁️'}
+"""
                             self.dispatcher.send_telegram_message(briefing_msg)
                             system_logger.log("INFO", "AI", f"15???? ? (?: {conf:.1f}%)")
                             

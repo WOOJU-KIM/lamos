@@ -93,26 +93,6 @@ class TelegramNotifier:
     # ==============================================================================
     # 📱 1. [Type 1: 방어 (Veto / Block)]
     # ==============================================================================
-    def send_veto_alert(
-        self,
-        ticker: str,
-        gbdt_prob: float,
-        cross_dir: str
-    ) -> Dict[str, Any]:
-        """
-        [Type 1: 방어 (Veto / Block)]
-        GBDT는 60% 이상으로 진입을 요청했으나, 거시 지표인 Cross-Asset이 반대 방향을 가리켜
-        시스템이 매매를 강제 거부(Veto)하고 자본을 100% 보존한 경우 발송.
-        """
-        prob_val = gbdt_prob * 100.0 if gbdt_prob <= 1.0 else gbdt_prob
-        sym_clean = ticker.upper().strip()
-
-        message = "🚀 [Lumos 매수 체결]\n종목: " + sym_clean + "\n단가: " + str(entry_price) + "\nAI 확신도: " + str(prob_val) + "%"
-
-        return self._dispatch_message(message, alert_type="ENTRY_BUY")
-
-    # ==============================================================================
-    # 🏁 3. [Type 3: 청산 (Exit)]
     # ==============================================================================
     # 2. [Type 2: 매수 체결]
     # ==============================================================================
@@ -131,6 +111,7 @@ class TelegramNotifier:
         is_simulation: Optional[bool] = None
     ) -> Dict[str, Any]:
         if is_simulation is None:
+            import os
             env_sim = os.getenv("KIWOOM_IS_SIMULATION", "1").strip()
             is_simulation = (env_sim == "1" or env_sim.lower() == "true")
         mode_tag = "🧪 [키움 모의투자]" if is_simulation else "🔥 [키움 실전투자]"
@@ -149,54 +130,26 @@ class TelegramNotifier:
             kst_now = datetime.now()
             time_stop_time = (kst_now + timedelta(minutes=time_stop_minutes)).strftime("%H:%M:%S")
 
-        message = "🚀 [Lumos 매수 체결]\n종목: " + sym_clean + "\n단가: " + str(entry_price) + "\nAI 확신도: " + str(prob_val) + "%"
+        message = f"""🟢 <b>[Lumos 신규 진입] {sym_clean}</b>
+{mode_tag}
+
+🎯 <b>진입 정보</b>
+• <b>종목</b>: {sym_clean}
+• <b>체결가</b>: ${entry_price:,.2f}
+• <b>수량</b>: {qty}주 (총 ${total_amt:,.2f})
+
+🧠 <b>AI 분석 결과</b> ({strategy_tag})
+• <b>GBDT 확신도</b>: {prob_val:.1f}%
+
+🛡️ <b>자동 방어선(ATR Trailing)</b>
+• <b>목표가(TP)</b>: ${calc_tp:,.2f} (+{tp_pct_calc}%)
+• <b>손절가(SL)</b>: ${calc_sl:,.2f} (-{sl_pct_calc}%)
+• <b>타임스탑</b>: {time_stop_time} ({time_stop_minutes}분)"""
 
         return self._dispatch_message(message, alert_type="ENTRY_BUY")
 
     # ==============================================================================
-    # 3. [Type 3: 청산]
-    # ==============================================================================
-    # 2. [Type 2: 매수 체결]
-    # ==============================================================================
-    def send_entry_alert(
-        self,
-        ticker: str,
-        entry_price: float,
-        qty: int,
-        gbdt_prob: float,
-        cross_dir: str,
-        tp_price: Optional[float] = None,
-        sl_price: Optional[float] = None,
-        time_stop_time: Optional[str] = None,
-        time_stop_minutes: int = 90,
-        strategy_tag: str = "Lumos V3",
-        is_simulation: Optional[bool] = None
-    ) -> Dict[str, Any]:
-        if is_simulation is None:
-            env_sim = os.getenv("KIWOOM_IS_SIMULATION", "1").strip()
-            is_simulation = (env_sim == "1" or env_sim.lower() == "true")
-        mode_tag = "🧪 [키움 모의투자]" if is_simulation else "🔥 [키움 실전투자]"
-
-        prob_val = gbdt_prob * 100.0 if gbdt_prob <= 1.0 else gbdt_prob
-        sym_clean = ticker.upper().strip()
-        total_amt = round(entry_price * qty, 2)
-
-        calc_tp = tp_price if tp_price is not None else round(entry_price * 1.030, 2)
-        calc_sl = sl_price if sl_price is not None else round(entry_price * 0.980, 2)
-        tp_pct_calc = round(((calc_tp - entry_price) / entry_price) * 100.0, 2) if entry_price > 0 else 3.0
-        sl_pct_calc = round(((entry_price - calc_sl) / entry_price) * 100.0, 2) if entry_price > 0 else 2.0
-        
-        if not time_stop_time:
-            from datetime import datetime, timedelta
-            kst_now = datetime.now()
-            time_stop_time = (kst_now + timedelta(minutes=time_stop_minutes)).strftime("%H:%M:%S")
-
-        message = "🚀 [Lumos 매수 체결]\n종목: " + sym_clean + "\n단가: " + str(entry_price) + "\nAI 확신도: " + str(prob_val) + "%"
-
-        return self._dispatch_message(message, alert_type="ENTRY_BUY")
-
-    # ==============================================================================
-    # 3. [Type 3: 청산]
+    # 3. [Type 3: 청산 (Exit)]
     # ==============================================================================
     def send_exit_alert(
         self,
@@ -209,35 +162,28 @@ class TelegramNotifier:
         is_simulation: Optional[bool] = None
     ) -> Dict[str, Any]:
         """
-        [Type 3: 청산 (Exit)]
-        4대 청산 룰 중 하나에 의해 포지션이 0이 된 경우 발송.
-        청산 사유에 따라 헤더 이모지 자동 분기:
-          - TP (+3.0% / +2.5% 목표 달성): 🎯
-          - SL (-2.0% / -1.67% 칼손절): ✂️
-          - TimeStop (90분 / 30분 타임스탑): ⏱️
-          - Overnight Zero (15:50 NYT EOD 전량 청산): 🌙
+        [Type 3: 청산 알림]
         """
         if is_simulation is None:
+            import os
             env_sim = os.getenv("KIWOOM_IS_SIMULATION", "1").strip()
             is_simulation = (env_sim == "1" or env_sim.lower() == "true")
-        mode_tag = "🧪 [키움 모의투자]" if is_simulation else "🚨 [키움 실전투자]"
+        mode_tag = "🧪 [키움 모의투자]" if is_simulation else "🔥 [키움 실전투자]"
 
         sym_clean = ticker.upper().strip()
         reason_upper = exit_reason.upper()
 
-        # 청산 사유별 전용 이모지 자동 매핑
         if any(k in reason_upper for k in ["TP", "익절", "+3.0", "+3.5", "+2.5", "TARGET", "목표"]):
             emoji = "🎯"
         elif any(k in reason_upper for k in ["SL", "손절", "-2.0", "-1.67", "STOP_LOSS", "칼손절"]):
-            emoji = "✂️"
+            emoji = "🛡️"
         elif any(k in reason_upper for k in ["TIME", "90분", "30분", "타임스탑", "DURATION"]):
             emoji = "⏱️"
         elif any(k in reason_upper for k in ["EOD", "OVERNIGHT", "오버나잇", "종가", "마감"]):
             emoji = "🌙"
         else:
-            emoji = "🏁"
+            emoji = "🔔"
 
-        # 손익률 및 실현 손익금(원화 환산) 산출
         if entry_price > 0:
             pnl_percent = ((exit_price - entry_price) / entry_price) * 100.0
         else:
@@ -248,12 +194,23 @@ class TelegramNotifier:
         pnl_sign = "+" if pnl_krw > 0 else ""
         pnl_amount_str = f"{pnl_sign}{pnl_krw:,}"
 
-        message = "🚀 [Lumos 매수 체결]\n종목: " + sym_clean + "\n단가: " + str(entry_price) + "\nAI 확신도: " + str(prob_val) + "%"
+        message = f"""{emoji} <b>[Lumos 매도 청산] {sym_clean}</b>
+{mode_tag}
 
-        return self._dispatch_message(message, alert_type="ENTRY_BUY")
+💰 <b>청산 결과 요약</b>
+• <b>사유</b>: {exit_reason}
+• <b>수익률</b>: {pnl_sign}{pnl_percent:.2f}%
+• <b>추정 손익</b>: {pnl_amount_str}원 (${pnl_usd:,.2f})
+
+📊 <b>거래 상세</b>
+• <b>매수가</b>: ${entry_price:,.2f}
+• <b>매도가</b>: ${exit_price:,.2f}
+• <b>수량</b>: {qty}주"""
+
+        return self._dispatch_message(message, alert_type="EXIT_SELL")
 
     # ==============================================================================
-    # 🚀 4. 발송 파이프라인 코어 (비동기 큐 / 동기 폴백 / 재시도 방어)
+    # 4. 발송 파이프라인 코어
     # ==============================================================================
     def _dispatch_message(self, text: str, alert_type: str = "INFO") -> Dict[str, Any]:
         """메시지 라우팅: 비동기 큐 적재(Non-blocking 0ms) 또는 동기 즉시 발송"""
