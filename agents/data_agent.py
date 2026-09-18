@@ -6,13 +6,13 @@ from datetime import datetime
 class DataAgent:
     """
     [1. Data Agent]
-    yfinance 라이브러리를 통해 실시간 및 1~3년 장기 SOXL, SOXS, SOXX, VIX 데이터를 수집하고
+    yfinance 라이브러리를 통해 실시간 및 1~3년 장기 TQQQ, SQQQ, SOXX, VIX 데이터를 수집하고
     정량 지표를 종합 정제하는 에이전트
     """
     def __init__(self):
         self.symbols = {
-            "SOXL": "SOXL",
-            "SOXS": "SOXS",
+            "TQQQ": "TQQQ",
+            "SQQQ": "SQQQ",
             "SOXX": "SOXX",
             "VIX": "^VIX"
         }
@@ -76,20 +76,20 @@ class DataAgent:
 
     def get_summary_text(self, market_data: Dict[str, Any]) -> str:
         """에이전트에 주입할 텍스트 요약본 생성"""
-        soxl = market_data["assets"]["SOXL"]
-        soxs = market_data["assets"]["SOXS"]
+        tqqq = market_data["assets"]["TQQQ"]
+        sqqq = market_data["assets"]["SQQQ"]
         vix = market_data["vix"]
 
         summary = f"""[실시간 시장 데이터 브리핑 - {market_data['timestamp']}]
-1. SOXL (반도체 3x 불):
-   - 현재가: ${soxl['current_price']} (전일 대비 {soxl['change_pct']:+.2f}%, {soxl['change_amount']:+.2f}$)
-   - 당일 범위: 저가 ${soxl['day_low']} ~ 고가 ${soxl['day_high']}
-   - 기술적 지표: 5일선 ${soxl['ma5']} | 20일선 ${soxl['ma20']} | 50일선 ${soxl['ma50']} | 200일선 ${soxl['ma200']}
+1. TQQQ (반도체 3x 불):
+   - 현재가: ${tqqq['current_price']} (전일 대비 {tqqq['change_pct']:+.2f}%, {tqqq['change_amount']:+.2f}$)
+   - 당일 범위: 저가 ${tqqq['day_low']} ~ 고가 ${tqqq['day_high']}
+   - 기술적 지표: 5일선 ${tqqq['ma5']} | 20일선 ${tqqq['ma20']} | 50일선 ${tqqq['ma50']} | 200일선 ${tqqq['ma200']}
 
-2. SOXS (반도체 3x 베어/헤지):
-   - 현재가: ${soxs['current_price']} (전일 대비 {soxs['change_pct']:+.2f}%, {soxs['change_amount']:+.2f}$)
-   - 당일 범위: 저가 ${soxs['day_low']} ~ 고가 ${soxs['day_high']}
-   - 기술적 지표: 5일선 ${soxs['ma5']} | 20일선 ${soxs['ma20']}
+2. SQQQ (반도체 3x 베어/헤지):
+   - 현재가: ${sqqq['current_price']} (전일 대비 {sqqq['change_pct']:+.2f}%, {sqqq['change_amount']:+.2f}$)
+   - 당일 범위: 저가 ${sqqq['day_low']} ~ 고가 ${sqqq['day_high']}
+   - 기술적 지표: 5일선 ${sqqq['ma5']} | 20일선 ${sqqq['ma20']}
 
 3. VIX (시장 변동성 지수):
    - 현재 지수: {vix['current_price']} pt (전일 대비 {vix['change_pct']:+.2f}%)

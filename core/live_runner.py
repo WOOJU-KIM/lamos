@@ -1,3 +1,4 @@
+import config
 import os
 # import os
 import sys
@@ -235,7 +236,7 @@ class KiwoomLiveRunner:
         self.data_lake = MarketDataLake()
         self.shadow_sandbox = ShadowSandboxEngine()
         self.circuit_breaker = CircuitBreakerEngine()
-        self.moe_orchestrator = MoEMetaOrchestrator(confidence_threshold=0.62, gbdt_threshold=0.62)
+        self.moe_orchestrator = MoEMetaOrchestrator(confidence_threshold=config.GBDT_CONFIDENCE_THRESHOLD, gbdt_threshold=config.GBDT_CONFIDENCE_THRESHOLD)
         self.enable_5m_sniper = False  # ? 15 ? ?? (? 77.55%, PF 3.98  / 5 ?? ? )
 #         #self.sniper_engine = PowerHourSniper(
 #             tp_pct=0.025,
@@ -1134,11 +1135,11 @@ class KiwoomLiveRunner:
                         self._last_briefing_time = now_t
                         
                         try:
-                            self.data_lake.sync_live_intraday_candles(["SOXL", "SOXS", "SOXX", "NVDA", "QQQ", "VIXY", "IEF"])
-                            df_15m = self.data_lake.load_candles("SOXL", "15m")
+                            self.data_lake.sync_live_intraday_candles(["TQQQ", "SQQQ", "SOXX", "NVDA", "QQQ", "VIXY", "IEF"])
+                            df_15m = self.data_lake.load_candles("TQQQ", "15m")
                             live_prices = {
-                                "SOXL": self.ws_streamer.get_latest_price("SOXL", 0.0),
-                                "SOXS": self.ws_streamer.get_latest_price("SOXS", 0.0),
+                                "TQQQ": self.ws_streamer.get_latest_price("TQQQ", 0.0),
+                                "SQQQ": self.ws_streamer.get_latest_price("SQQQ", 0.0),
                                 "SOXX": self.ws_streamer.get_latest_price("SOXX", 0.0),
                                 "QQQ": self.ws_streamer.get_latest_price("QQQ", 0.0),
                                 "NVDA": self.ws_streamer.get_latest_price("NVDA", 0.0),
@@ -1165,8 +1166,8 @@ class KiwoomLiveRunner:
                             system_logger.log("INFO", "AI", f"15???? ? (?: {conf:.1f}%)")
                             
                             if is_appr and not active_pos and not self.daily_circuit_breaker_triggered:
-                                if direction in ["LONG_SOXL", "SHORT_SOXS"]:
-                                    winner_sym = "SOXL" if direction == "LONG_SOXL" else "SOXS"
+                                if direction in ["LONG_TQQQ", "SHORT_SQQQ"]:
+                                    winner_sym = "TQQQ" if direction == "LONG_TQQQ" else "SQQQ"
                                     cur_px = live_prices.get(winner_sym, 0.0)
                                     
                                     if cur_px > 0:
@@ -1205,8 +1206,8 @@ class KiwoomLiveRunner:
                         stk_bal = self.broker.get_overseas_stock_balance()
                         if stk_bal.get("ok") and stk_bal.get("holdings"):
                             live_p = {
-                                "SOXL": self.ws_streamer.get_latest_price("SOXL", 0.0),
-                                "SOXS": self.ws_streamer.get_latest_price("SOXS", 0.0)
+                                "TQQQ": self.ws_streamer.get_latest_price("TQQQ", 0.0),
+                                "SQQQ": self.ws_streamer.get_latest_price("SQQQ", 0.0)
                             }
                             if current_session == "EOD_LIQUIDATION":
                                 for h in stk_bal.get("holdings"):

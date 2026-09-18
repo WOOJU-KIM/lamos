@@ -184,12 +184,12 @@ def run_kiwoom_mock_comms_check():
         print(f"❌ 체결/미체결 내역 조회 실패: {e}")
         results["4_order_history"] = {"status": "FAIL", "elapsed_sec": ord_elapsed, "error": str(e)}
 
-    # 5. 미국주식 시세 조회 통신 점검 (SOXL, SOXS, NVDA)
+    # 5. 미국주식 시세 조회 통신 점검 (TQQQ, SQQQ, NVDA)
     print("\n" + "-" * 80)
-    print("5️⃣ [통신 체크 5] 미국주식 실시간 시세 조회 (SOXL, SOXS, NVDA)")
+    print("5️⃣ [통신 체크 5] 미국주식 실시간 시세 조회 (TQQQ, SQQQ, NVDA)")
     print("-" * 80)
     quotes = {}
-    for sym in ["SOXL", "SOXS", "NVDA"]:
+    for sym in ["TQQQ", "SQQQ", "NVDA"]:
         q_start = time.time()
         q = broker.get_stock_quote(sym)
         q_elapsed = round(time.time() - q_start, 3)
@@ -206,7 +206,7 @@ def run_kiwoom_mock_comms_check():
     print("\n" + "-" * 80)
     print("6️⃣ [통신 체크 6] 키움 모의투자 실시간 매수 신호 송출 및 리턴 수신 (TR: ust20000 | /api/us/ordr)")
     print("-" * 80)
-    test_sym = "SOXL"
+    test_sym = "TQQQ"
     quote_px = quotes.get(test_sym, {}).get("price", 28.50)
     # 현재가 대비 충분히 낮게 지정가 설정하여 바로 체결되지 않고 미체결로 생성되게 테스트 (취소 테스트 연계)
     test_limit_px = round(quote_px * 0.5, 2)  # 50% 낮은 가격으로 지정가 주문
@@ -299,7 +299,7 @@ def run_kiwoom_mock_comms_check():
                     "refresh": "1",
                     "data": [
                         {
-                            "item": [{"jmcode": "SOXL", "stex_tp": "ND"}, {"jmcode": "SOXS", "stex_tp": "ND"}],
+                            "item": [{"jmcode": "TQQQ", "stex_tp": "ND"}, {"jmcode": "SQQQ", "stex_tp": "ND"}],
                             "type": ["0A", "0B", "FT"]
                         }
                     ]

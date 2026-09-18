@@ -20,8 +20,8 @@ from core.ml_engine import MLFeatureEngine
 
 # Load historical candles from SQLite
 conn = sqlite3.connect('data/market_data.db')
-soxl_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='SOXL' AND timeframe='15m' ORDER BY datetime", conn)
-soxs_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='SOXS' AND timeframe='15m' ORDER BY datetime", conn)
+tqqq_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='TQQQ' AND timeframe='15m' ORDER BY datetime", conn)
+sqqq_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='SQQQ' AND timeframe='15m' ORDER BY datetime", conn)
 nvda_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='NVDA' AND timeframe='15m' ORDER BY datetime", conn)
 qqq_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='QQQ' AND timeframe='15m' ORDER BY datetime", conn)
 soxx_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='SOXX' AND timeframe='15m' ORDER BY datetime", conn)
@@ -29,15 +29,15 @@ vix_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as 
 tnx_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='^TNX' AND timeframe='15m' ORDER BY datetime", conn)
 conn.close()
 
-for df in [soxl_df, soxs_df, nvda_df, qqq_df, soxx_df, vix_df, tnx_df]:
+for df in [tqqq_df, sqqq_df, nvda_df, qqq_df, soxx_df, vix_df, tnx_df]:
     df['Datetime'] = pd.to_datetime(df['datetime'])
     df['date'] = df['datetime'].str.slice(0, 10)
     df.set_index('Datetime', inplace=True)
 
-unique_dates = sorted(soxl_df['date'].unique())
+unique_dates = sorted(tqqq_df['date'].unique())
 total_weeks = len(unique_dates) / 5.0
 
-print(f"Loaded {len(soxl_df)} 15m candles over {len(unique_dates)} trading days ({total_weeks:.1f} weeks).")
+print(f"Loaded {len(tqqq_df)} 15m candles over {len(unique_dates)} trading days ({total_weeks:.1f} weeks).")
 
 class LumosV103MoEOrchestrator:
     """
@@ -95,7 +95,7 @@ class LumosV103MoEOrchestrator:
         self,
         b_idx: int,
         cur_vix: float,
-        soxl_sub: pd.DataFrame,
+        tqqq_sub: pd.DataFrame,
         nvda_sub: pd.DataFrame,
         qqq_sub: pd.DataFrame
     ) -> Tuple[np.ndarray, Dict[str, float]]:
@@ -104,8 +104,8 @@ class LumosV103MoEOrchestrator:
         vix_norm = (cur_vix - 17.0) / 4.0
 
         atr_ratio = 1.0
-        if len(soxl_sub) >= 20:
-            hl = soxl_sub['High'] - soxl_sub['Low']
+        if len(tqqq_sub) >= 20:
+            hl = tqqq_sub['High'] - tqqq_sub['Low']
             rec_atr = hl.tail(5).mean()
             avg_atr = hl.tail(20).mean()
             if avg_atr > 0:
@@ -113,12 +113,12 @@ class LumosV103MoEOrchestrator:
         atr_norm = (atr_ratio - 1.0) / 0.4
 
         cvd_delta = 0.0
-        if len(soxl_sub) >= 5:
-            c = soxl_sub['Close']
-            o = soxl_sub['Open']
-            h = soxl_sub['High']
-            l = soxl_sub['Low']
-            v = soxl_sub['Volume']
+        if len(tqqq_sub) >= 5:
+            c = tqqq_sub['Close']
+            o = tqqq_sub['Open']
+            h = tqqq_sub['High']
+            l = tqqq_sub['Low']
+            v = tqqq_sub['Volume']
             hl_diff = (h - l).replace(0, 0.001)
             v_delta = ((c - o) / hl_diff) * v
             avg_v = v.tail(15).mean() + 1e-6
@@ -126,8 +126,8 @@ class LumosV103MoEOrchestrator:
         cvd_norm = np.clip(cvd_delta, -3.0, 3.0)
 
         dislocation_lag = 0.0
-        if len(soxl_sub) >= 5 and len(nvda_sub) >= 5 and len(qqq_sub) >= 5:
-            s_ret = (soxl_sub['Close'].iloc[-1] / soxl_sub['Close'].iloc[-5] - 1.0) * 100.0
+        if len(tqqq_sub) >= 5 and len(nvda_sub) >= 5 and len(qqq_sub) >= 5:
+            s_ret = (tqqq_sub['Close'].iloc[-1] / tqqq_sub['Close'].iloc[-5] - 1.0) * 100.0
             n_ret = (nvda_sub['Close'].iloc[-1] / nvda_sub['Close'].iloc[-5] - 1.0) * 100.0
             q_ret = (qqq_sub['Close'].iloc[-1] / qqq_sub['Close'].iloc[-5] - 1.0) * 100.0
             macro_exp = (n_ret * 0.6 + q_ret * 0.4) * 3.0
@@ -148,12 +148,12 @@ class LumosV103MoEOrchestrator:
         self,
         b_idx: int,
         cur_vix: float,
-        soxl_sub: pd.DataFrame,
+        tqqq_sub: pd.DataFrame,
         nvda_sub: pd.DataFrame,
         qqq_sub: pd.DataFrame,
         threshold: float
     ) -> Dict[str, Any]:
-        R, reg_dict = self.compute_regime(b_idx, cur_vix, soxl_sub, nvda_sub, qqq_sub)
+        R, reg_dict = self.compute_regime(b_idx, cur_vix, tqqq_sub, nvda_sub, qqq_sub)
         
         # Gating Output = Sigmoid(W · R + b)
         logits = self.W @ R + self.b
@@ -171,35 +171,35 @@ class LumosV103MoEOrchestrator:
 
         try:
             if top_track == "track2_orderflow":
-                cvd_df = self.m2.compute_cvd(soxl_sub)
+                cvd_df = self.m2.compute_cvd(tqqq_sub)
                 sig_code, conf, _ = self.m2.predict_signal(cvd_df.iloc[-1])
-                direction = "LONG_SOXL" if sig_code >= 0 else "SHORT_SOXS"
+                direction = "LONG_TQQQ" if sig_code >= 0 else "SHORT_SQQQ"
             elif top_track == "track3_tda":
-                sig_code, conf, _ = self.m3.predict_signal(soxl_sub)
-                direction = "LONG_SOXL" if sig_code >= 0 else "SHORT_SOXS"
+                sig_code, conf, _ = self.m3.predict_signal(tqqq_sub)
+                direction = "LONG_TQQQ" if sig_code >= 0 else "SHORT_SQQQ"
             elif top_track == "track4_statespace":
-                sig_code, conf, _ = self.m4.predict_signal(soxl_sub['Close'].values)
-                direction = "LONG_SOXL" if sig_code >= 0 else "SHORT_SOXS"
+                sig_code, conf, _ = self.m4.predict_signal(tqqq_sub['Close'].values)
+                direction = "LONG_TQQQ" if sig_code >= 0 else "SHORT_SQQQ"
             elif top_track == "track5_cross_asset":
-                s_ret = (soxl_sub['Close'].iloc[-1] / soxl_sub['Close'].iloc[-5] - 1.0)
+                s_ret = (tqqq_sub['Close'].iloc[-1] / tqqq_sub['Close'].iloc[-5] - 1.0)
                 n_ret = (nvda_sub['Close'].iloc[-1] / nvda_sub['Close'].iloc[-5] - 1.0)
                 q_ret = (qqq_sub['Close'].iloc[-1] / qqq_sub['Close'].iloc[-5] - 1.0)
                 sig_code, conf, _ = self.m5.predict_signal(s_ret, n_ret, q_ret, 0.0, -0.01, -0.005)
-                direction = "LONG_SOXL" if sig_code >= 0 else "SHORT_SOXS"
+                direction = "LONG_TQQQ" if sig_code >= 0 else "SHORT_SQQQ"
             else: # Track 0 / Track 1 (GBDT)
-                c = soxl_sub['Close']
+                c = tqqq_sub['Close']
                 ret_5 = float(c.iloc[-1] / c.iloc[-5] - 1.0) if len(c) >= 5 else 0.0
                 if ret_5 >= 0.003:
-                    direction = "LONG_SOXL"
+                    direction = "LONG_TQQQ"
                     sig_code = 1
                 elif ret_5 <= -0.003:
-                    direction = "SHORT_SOXS"
+                    direction = "SHORT_SQQQ"
                     sig_code = -1
                 else:
                     sig_code = 1 if ret_5 >= 0 else -1
         except Exception:
             sig_code = 1
-            direction = "LONG_SOXL"
+            direction = "LONG_TQQQ"
 
         # Signal Approval: Top-1 Sigmoid Absolute Confidence >= Threshold T
         is_approved = bool(top_gating_score >= threshold and sig_code != 0)
@@ -239,30 +239,30 @@ def run_simulation():
         entry_conf = 0.0
 
         for day_str in unique_dates:
-            day_soxl = soxl_df[soxl_df['date'] == day_str].reset_index(drop=True)
-            day_soxs = soxs_df[soxs_df['date'] == day_str].reset_index(drop=True)
+            day_tqqq = tqqq_df[tqqq_df['date'] == day_str].reset_index(drop=True)
+            day_sqqq = sqqq_df[sqqq_df['date'] == day_str].reset_index(drop=True)
             
-            if len(day_soxl) < 5 or len(day_soxs) < 5:
+            if len(day_tqqq) < 5 or len(day_sqqq) < 5:
                 continue
 
-            num_bars = min(len(day_soxl), len(day_soxs))
+            num_bars = min(len(day_tqqq), len(day_sqqq))
 
             for b_idx in range(num_bars):
-                row_l = day_soxl.iloc[b_idx]
-                row_s = day_soxs.iloc[b_idx]
+                row_l = day_tqqq.iloc[b_idx]
+                row_s = day_sqqq.iloc[b_idx]
                 bar_dt = row_l['datetime']
                 time_str = bar_dt.split(" ")[1][:5]
 
                 sub_vix = vix_df[vix_df['datetime'] <= bar_dt]
                 cur_vix = float(sub_vix.iloc[-1]['Close']) if not sub_vix.empty else 16.5
-                soxl_sub = soxl_df[soxl_df['datetime'] <= bar_dt].tail(30)
+                tqqq_sub = tqqq_df[tqqq_df['datetime'] <= bar_dt].tail(30)
                 nvda_sub = nvda_df[nvda_df['datetime'] <= bar_dt].tail(30)
                 qqq_sub = qqq_df[qqq_df['datetime'] <= bar_dt].tail(30)
 
                 # 1. Exit Evaluation
                 if in_market and current_pos != "NONE":
                     bars_held += 1
-                    curr_row = row_l if current_pos == "SOXL" else row_s
+                    curr_row = row_l if current_pos == "TQQQ" else row_s
                     curr_h = float(curr_row['High'])
                     curr_l = float(curr_row['Low'])
                     curr_c = float(curr_row['Close'])
@@ -321,13 +321,13 @@ def run_simulation():
                         continue
 
                     gating_res = moe.evaluate_gating(
-                        b_idx, cur_vix, soxl_sub, nvda_sub, qqq_sub, threshold=T
+                        b_idx, cur_vix, tqqq_sub, nvda_sub, qqq_sub, threshold=T
                     )
 
                     if gating_res["is_approved"]:
                         in_market = True
-                        current_pos = "SOXL" if gating_res["direction"] == "LONG_SOXL" else "SOXS"
-                        entry_row = row_l if current_pos == "SOXL" else row_s
+                        current_pos = "TQQQ" if gating_res["direction"] == "LONG_TQQQ" else "SQQQ"
+                        entry_row = row_l if current_pos == "TQQQ" else row_s
                         entry_price = float(entry_row['Close'])
                         entry_time = bar_dt
                         bars_held = 0

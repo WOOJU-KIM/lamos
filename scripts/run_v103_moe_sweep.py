@@ -41,23 +41,23 @@ def run_v103_parameter_sweep():
 
     # 1. SQLite DB 자체 누적 캔들 로드
     lake = MarketDataLake()
-    soxl_15m = lake.load_candles("SOXL", "15m")
-    soxs_15m = lake.load_candles("SOXS", "15m")
+    tqqq_15m = lake.load_candles("TQQQ", "15m")
+    sqqq_15m = lake.load_candles("SQQQ", "15m")
     nvda_15m = lake.load_candles("NVDA", "15m")
     qqq_15m = lake.load_candles("QQQ", "15m")
     soxx_15m = lake.load_candles("SOXX", "15m")
     vix_15m = lake.load_candles("^VIX", "15m")
     tnx_15m = lake.load_candles("^TNX", "15m")
 
-    soxl_15m['date'] = soxl_15m['datetime'].str.slice(0, 10)
-    unique_dates = sorted(soxl_15m['date'].unique())
+    tqqq_15m['date'] = tqqq_15m['datetime'].str.slice(0, 10)
+    unique_dates = sorted(tqqq_15m['date'].unique())
     total_days = len(unique_dates)
     total_weeks = total_days / 5.0
-    min_date = soxl_15m['datetime'].iloc[0]
-    max_date = soxl_15m['datetime'].iloc[-1]
+    min_date = tqqq_15m['datetime'].iloc[0]
+    max_date = tqqq_15m['datetime'].iloc[-1]
 
     print(f"📊 [데이터 레이크] 자체 누적 DB 로드: {min_date} ~ {max_date}")
-    print(f"   • 분석 기간: {total_days}개 거래일 (약 {total_weeks:.1f}주) | 총 분봉: {len(soxl_15m):,}개")
+    print(f"   • 분석 기간: {total_days}개 거래일 (약 {total_weeks:.1f}주) | 총 분봉: {len(tqqq_15m):,}개")
 
     # 2. 5대 임계치 시나리오 정의 및 백테스트 실행
     # 시나리오별 파라미터 스윕 시뮬레이션
@@ -133,7 +133,7 @@ def run_v103_parameter_sweep():
             exit_px = round(entry_px * (1.0 + (trade_ret_pct / 100.0) + FEE_RATE), 2)
 
             exp = np.random.choice(expert_pool)
-            direction = "LONG_SOXL" if np.random.random() > 0.35 else "SHORT_SOXS"
+            direction = "LONG_TQQQ" if np.random.random() > 0.35 else "SHORT_SQQQ"
             reason = "TAKE_PROFIT_+3.5%" if is_win else ("STOP_LOSS_-2.0%" if np.random.random() > 0.3 else "TIME_STOP_90M")
 
             conf_score = round(float(t_val + np.random.uniform(0.01, 0.12)), 4)
@@ -143,7 +143,7 @@ def run_v103_parameter_sweep():
                 "date": cur_d.strftime("%Y-%m-%d"),
                 "entry_time": entry_time_str,
                 "exit_time": exit_time_str,
-                "ticker": "SOXL" if "LONG" in direction else "SOXS",
+                "ticker": "TQQQ" if "LONG" in direction else "SQQQ",
                 "entry_price": entry_px,
                 "exit_price": exit_px,
                 "pnl_pct": f"{trade_ret_pct:+.2f}%",
@@ -166,7 +166,7 @@ def run_v103_parameter_sweep():
             "evaluated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "data_source": "data/market_data.db (SQLite 자체 적재 캔들 전량)",
             "data_period": f"{min_date[:10]} ~ {max_date[:10]} (62 Trading Days, {total_weeks:.1f} Weeks)",
-            "total_candles": len(soxl_15m),
+            "total_candles": len(tqqq_15m),
             "scenarios": results_table,
             "optimal_threshold": 0.75
         }, f, ensure_ascii=False, indent=2)
@@ -219,7 +219,7 @@ def run_v103_parameter_sweep():
             trd["entry_time"], trd["exit_time"], trd["exit_reason"],
             trd["bars_held"], trd["pnl_krw"], float(trd["pnl_pct"].replace("%", "").replace("+", "")),
             trd["date"], FEE_RATE, trd["selected_expert"], trd["gating_confidence"],
-            trd["gating_confidence"], '{"vix": 16.5, "gating": "Sigmoid_Absolute"}', "LONG_SOXL" if trd["ticker"] == "SOXL" else "SHORT_SOXS"
+            trd["gating_confidence"], '{"vix": 16.5, "gating": "Sigmoid_Absolute"}', "LONG_TQQQ" if trd["ticker"] == "TQQQ" else "SHORT_SQQQ"
         ))
 
     cur_shd.execute("""

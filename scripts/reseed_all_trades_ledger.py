@@ -66,7 +66,7 @@ def generate_track_trades(
         g_wt = round(random.uniform(0.65, 0.95), 2)
         exp_conf = round(random.uniform(0.62, 0.88), 2)
         
-        direction = "LONG_SOXL" if random.random() > 0.3 else "SHORT_SOXS"
+        direction = "LONG_TQQQ" if random.random() > 0.3 else "SHORT_SQQQ"
         exit_reason = "TAKE_PROFIT" if is_win else "STOP_LOSS"
         
         regime_snapshot = {
@@ -82,7 +82,7 @@ def generate_track_trades(
             "trade_id": trade_id,
             "model_id": model_id,
             "track_label": model_name,
-            "ticker": "SOXL" if "SOXL" in direction else "SOXS",
+            "ticker": "TQQQ" if "TQQQ" in direction else "SQQQ",
             "entry_price": entry_price,
             "exit_price": exit_price,
             "entry_time": current_dt.strftime("%H:%M:%S"),

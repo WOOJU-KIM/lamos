@@ -82,7 +82,7 @@ def run_exit_shadow_backtest(
 ) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, Any]]:
     """
     df_market: 15분봉 시세 및 CVD 지표가 포함된 통합 데이터프레임
-    entry_signals: Lumos V3 (GBDT 55% + Cross-Asset Veto) 동일 진입 타점 ('SOXL', 'SOXS', 'HOLD')
+    entry_signals: Lumos V3 (GBDT 55% + Cross-Asset Veto) 동일 진입 타점 ('TQQQ', 'SQQQ', 'HOLD')
     """
     TP_PCT = 0.035          # +3.5% 확정 익절
     SL_PCT = -0.020         # -2.0% 칼손절
@@ -118,18 +118,18 @@ def run_exit_shadow_backtest(
                     sym = active_pos['symbol']
                     buy_px = active_pos['buy_price']
 
-                    if sym == "SOXL":
+                    if sym == "TQQQ":
                         cur_h = row['high']
                         cur_l = row['low']
                         cur_c = row['close']
                         p_series = day_df['close'].iloc[max(0, b_idx - cvd_window + 1): b_idx + 1]
                         c_series = day_df['cvd'].iloc[max(0, b_idx - cvd_window + 1): b_idx + 1]
                     else:
-                        cur_h = row['soxs_high']
-                        cur_l = row['soxs_low']
-                        cur_c = row['soxs_close']
-                        p_series = day_df['soxs_close'].iloc[max(0, b_idx - cvd_window + 1): b_idx + 1]
-                        c_series = day_df['soxs_cvd'].iloc[max(0, b_idx - cvd_window + 1): b_idx + 1]
+                        cur_h = row['sqqq_high']
+                        cur_l = row['sqqq_low']
+                        cur_c = row['sqqq_close']
+                        p_series = day_df['sqqq_close'].iloc[max(0, b_idx - cvd_window + 1): b_idx + 1]
+                        c_series = day_df['sqqq_cvd'].iloc[max(0, b_idx - cvd_window + 1): b_idx + 1]
 
                     max_ret = (cur_h - buy_px) / buy_px
                     min_ret = (cur_l - buy_px) / buy_px
@@ -204,18 +204,18 @@ def run_exit_shadow_backtest(
                         continue
 
                     sig = entry_signals.loc[dt]
-                    if sig not in ['SOXL', 'SOXS']:
+                    if sig not in ['TQQQ', 'SQQQ']:
                         continue
 
                     # 3중 스크린 검증
-                    if sig == 'SOXL':
-                        if not (row['trend_ok_soxl'] and row['dip_ok_soxl']):
+                    if sig == 'TQQQ':
+                        if not (row['trend_ok_tqqq'] and row['dip_ok_tqqq']):
                             continue
                         cur_px = row['close']
                     else:
-                        if not (row['trend_ok_soxs'] and row['dip_ok_soxs']):
+                        if not (row['trend_ok_sqqq'] and row['dip_ok_sqqq']):
                             continue
-                        cur_px = row['soxs_close']
+                        cur_px = row['sqqq_close']
 
                     entry_order_px = round(cur_px + SLIPPAGE_PAYUP, 2)
                     invest_amt = capital * 0.98
@@ -336,24 +336,24 @@ def run_comparison_pipeline():
     print("⏳ [1/3] 로컬 데이터레이크(market_data.db)로부터 15분봉 및 CVD 데이터 로드 중...")
 
     lake = MarketDataLake()
-    soxl_15m = lake.load_candles('SOXL', '15m')
-    soxs_15m = lake.load_candles('SOXS', '15m')
+    tqqq_15m = lake.load_candles('TQQQ', '15m')
+    sqqq_15m = lake.load_candles('SQQQ', '15m')
     nvda_15m = lake.load_candles('NVDA', '15m')
     qqq_15m = lake.load_candles('QQQ', '15m')
     vix_15m = lake.load_candles('^VIX', '15m')
     soxx_15m = lake.load_candles('SOXX', '15m')
     soxx_60m = lake.load_candles('SOXX', '60m')
-    soxl_60m = lake.load_candles('SOXL', '60m')
+    tqqq_60m = lake.load_candles('TQQQ', '60m')
 
     moe = MoEMetaOrchestrator()
     gbdt_engine = moe.gbdt_engine
     cross_model = moe.cross_asset_model
 
     # GBDT Features
-    soxl_feat = gbdt_engine.extract_features(soxl_15m)
-    soxl_feat = gbdt_engine.add_confidence_columns(soxl_feat)
+    tqqq_feat = gbdt_engine.extract_features(tqqq_15m)
+    tqqq_feat = gbdt_engine.add_confidence_columns(tqqq_feat)
 
-    common_idx = soxl_15m.index.intersection(nvda_15m.index).intersection(qqq_15m.index).intersection(vix_15m.index)
+    common_idx = tqqq_15m.index.intersection(nvda_15m.index).intersection(qqq_15m.index).intersection(vix_15m.index)
 
     # CVD (Cumulative Volume Delta) 계산
     # Delta = Volume * (2*Close - High - Low) / (High - Low + 1e-6)
@@ -368,20 +368,20 @@ def run_comparison_pipeline():
         df_tmp = pd.DataFrame({'delta': delta, 'date': date_series}, index=df_c.index)
         return df_tmp.groupby('date')['delta'].cumsum()
 
-    cvd_soxl = calc_cvd(soxl_15m.loc[common_idx])
-    cvd_soxs = calc_cvd(soxs_15m.loc[common_idx])
+    cvd_tqqq = calc_cvd(tqqq_15m.loc[common_idx])
+    cvd_sqqq = calc_cvd(sqqq_15m.loc[common_idx])
 
     # Cross-Asset 계산
-    soxl_ret5 = (soxl_15m.loc[common_idx, 'Close'] / soxl_15m.loc[common_idx, 'Close'].shift(5) - 1.0).fillna(0.0)
+    tqqq_ret5 = (tqqq_15m.loc[common_idx, 'Close'] / tqqq_15m.loc[common_idx, 'Close'].shift(5) - 1.0).fillna(0.0)
     nvda_ret5 = (nvda_15m.loc[common_idx, 'Close'] / nvda_15m.loc[common_idx, 'Close'].shift(5) - 1.0).fillna(0.0)
     qqq_ret5 = (qqq_15m.loc[common_idx, 'Close'] / qqq_15m.loc[common_idx, 'Close'].shift(5) - 1.0).fillna(0.0)
     vix_ret5 = (vix_15m.loc[common_idx, 'Close'] / vix_15m.loc[common_idx, 'Close'].shift(5) - 1.0).fillna(0.0)
-    soxx_ret5 = (soxx_15m.loc[common_idx, 'Close'] / soxx_15m.loc[common_idx, 'Close'].shift(5) - 1.0).fillna(0.0) if not soxx_15m.empty else soxl_ret5
+    soxx_ret5 = (soxx_15m.loc[common_idx, 'Close'] / soxx_15m.loc[common_idx, 'Close'].shift(5) - 1.0).fillna(0.0) if not soxx_15m.empty else tqqq_ret5
 
     cross_dirs = []
     for dt in common_idx:
         sig_c, _, _ = cross_model.predict_signal(
-            soxl_ret=soxl_ret5.loc[dt],
+            tqqq_ret=tqqq_ret5.loc[dt],
             nvda_ret=nvda_ret5.loc[dt],
             qqq_ret=qqq_ret5.loc[dt],
             soxx_ret=soxx_ret5.loc[dt],
@@ -389,76 +389,76 @@ def run_comparison_pipeline():
             tnx_ret=0.0
         )
         if sig_c > 0:
-            cross_dirs.append('SOXL')
+            cross_dirs.append('TQQQ')
         elif sig_c < 0:
-            cross_dirs.append('SOXS')
+            cross_dirs.append('SQQQ')
         else:
             cross_dirs.append('HOLD')
 
     soxx_60m['ema20'] = soxx_60m['Close'].ewm(span=20, adjust=False).mean()
-    soxl_60m['ema20'] = soxl_60m['Close'].ewm(span=20, adjust=False).mean()
+    tqqq_60m['ema20'] = tqqq_60m['Close'].ewm(span=20, adjust=False).mean()
 
     df_market = pd.DataFrame(index=common_idx)
-    df_market['open'] = soxl_15m.loc[common_idx, 'Open']
-    df_market['high'] = soxl_15m.loc[common_idx, 'High']
-    df_market['low'] = soxl_15m.loc[common_idx, 'Low']
-    df_market['close'] = soxl_15m.loc[common_idx, 'Close']
-    df_market['volume'] = soxl_15m.loc[common_idx, 'Volume']
-    df_market['cvd'] = cvd_soxl
+    df_market['open'] = tqqq_15m.loc[common_idx, 'Open']
+    df_market['high'] = tqqq_15m.loc[common_idx, 'High']
+    df_market['low'] = tqqq_15m.loc[common_idx, 'Low']
+    df_market['close'] = tqqq_15m.loc[common_idx, 'Close']
+    df_market['volume'] = tqqq_15m.loc[common_idx, 'Volume']
+    df_market['cvd'] = cvd_tqqq
 
-    df_market['soxs_open'] = soxs_15m.loc[common_idx, 'Open']
-    df_market['soxs_high'] = soxs_15m.loc[common_idx, 'High']
-    df_market['soxs_low'] = soxs_15m.loc[common_idx, 'Low']
-    df_market['soxs_close'] = soxs_15m.loc[common_idx, 'Close']
-    df_market['soxs_volume'] = soxs_15m.loc[common_idx, 'Volume']
-    df_market['soxs_cvd'] = cvd_soxs
+    df_market['sqqq_open'] = sqqq_15m.loc[common_idx, 'Open']
+    df_market['sqqq_high'] = sqqq_15m.loc[common_idx, 'High']
+    df_market['sqqq_low'] = sqqq_15m.loc[common_idx, 'Low']
+    df_market['sqqq_close'] = sqqq_15m.loc[common_idx, 'Close']
+    df_market['sqqq_volume'] = sqqq_15m.loc[common_idx, 'Volume']
+    df_market['sqqq_cvd'] = cvd_sqqq
 
     # 60m 추세 필터 (Screen 1)
-    trend_ok_soxl, trend_ok_soxs = [], []
+    trend_ok_tqqq, trend_ok_sqqq = [], []
     for dt in common_idx:
         p_soxx = soxx_60m[soxx_60m.index <= dt]
-        p_soxl = soxl_60m[soxl_60m.index <= dt]
-        if len(p_soxx) >= 20 and len(p_soxl) >= 20:
+        p_tqqq = tqqq_60m[tqqq_60m.index <= dt]
+        if len(p_soxx) >= 20 and len(p_tqqq) >= 20:
             soxx_c = p_soxx['Close'].iloc[-1]
             soxx_e20 = p_soxx['ema20'].iloc[-1]
-            soxl_c = p_soxl['Close'].iloc[-1]
-            soxl_e20 = p_soxl['ema20'].iloc[-1]
-            trend_ok_soxl.append((soxx_c >= soxx_e20 * 0.998) and (soxl_c >= soxl_e20 * 0.998))
-            trend_ok_soxs.append(soxx_c <= soxx_e20 * 1.002)
+            tqqq_c = p_tqqq['Close'].iloc[-1]
+            tqqq_e20 = p_tqqq['ema20'].iloc[-1]
+            trend_ok_tqqq.append((soxx_c >= soxx_e20 * 0.998) and (tqqq_c >= tqqq_e20 * 0.998))
+            trend_ok_sqqq.append(soxx_c <= soxx_e20 * 1.002)
         else:
-            trend_ok_soxl.append(True)
-            trend_ok_soxs.append(True)
+            trend_ok_tqqq.append(True)
+            trend_ok_sqqq.append(True)
 
-    df_market['trend_ok_soxl'] = trend_ok_soxl
-    df_market['trend_ok_soxs'] = trend_ok_soxs
+    df_market['trend_ok_tqqq'] = trend_ok_tqqq
+    df_market['trend_ok_sqqq'] = trend_ok_sqqq
 
     # GBDT 및 Cross-Asset
-    c_feat = soxl_feat.loc[common_idx]
+    c_feat = tqqq_feat.loc[common_idx]
     gbdt_sig = c_feat['Signal']
     gbdt_conf = c_feat['Confidence']
-    df_market['gbdt_dir'] = np.where(gbdt_sig == 1, 'SOXL', np.where(gbdt_sig == -1, 'SOXS', 'HOLD'))
+    df_market['gbdt_dir'] = np.where(gbdt_sig == 1, 'TQQQ', np.where(gbdt_sig == -1, 'SQQQ', 'HOLD'))
     df_market['gbdt_prob'] = gbdt_conf.values
     df_market['cross_dir'] = cross_dirs
 
     # Screen 3 columns
-    df_market['dip_ok_soxl'] = (c_feat['VWAP_Diff'] <= 1.5) & (c_feat['RSI_14'] <= 62.0)
-    df_market['dip_ok_soxs'] = (c_feat['VWAP_Diff'] >= -1.5) & (c_feat['RSI_14'] >= 38.0)
+    df_market['dip_ok_tqqq'] = (c_feat['VWAP_Diff'] <= 1.5) & (c_feat['RSI_14'] <= 62.0)
+    df_market['dip_ok_sqqq'] = (c_feat['VWAP_Diff'] >= -1.5) & (c_feat['RSI_14'] >= 38.0)
 
     df_market['date'] = df_market.index.strftime('%Y-%m-%d')
     df_market['time'] = df_market.index.strftime('%H:%M')
 
     # Lumos V3 메인 진입 시그널 산출 (GBDT >= 55% + Cross-Asset Veto)
     print("⏳ [2/3] Lumos V3 불변 메인 진입 타점 고정 추출 (GBDT >= 55% + Cross-Asset Opposite Veto)...")
-    is_gbdt_soxl = (df_market['gbdt_dir'] == 'SOXL') & (df_market['gbdt_prob'] >= 0.55)
-    is_gbdt_soxs = (df_market['gbdt_dir'] == 'SOXS') & (df_market['gbdt_prob'] >= 0.55)
-    veto_soxl = is_gbdt_soxl & (df_market['cross_dir'] == 'SOXS')
-    veto_soxs = is_gbdt_soxs & (df_market['cross_dir'] == 'SOXL')
+    is_gbdt_tqqq = (df_market['gbdt_dir'] == 'TQQQ') & (df_market['gbdt_prob'] >= 0.55)
+    is_gbdt_sqqq = (df_market['gbdt_dir'] == 'SQQQ') & (df_market['gbdt_prob'] >= 0.55)
+    veto_tqqq = is_gbdt_tqqq & (df_market['cross_dir'] == 'SQQQ')
+    veto_sqqq = is_gbdt_sqqq & (df_market['cross_dir'] == 'TQQQ')
 
     entry_conds = [
-        is_gbdt_soxl & (~veto_soxl),
-        is_gbdt_soxs & (~veto_soxs)
+        is_gbdt_tqqq & (~veto_tqqq),
+        is_gbdt_sqqq & (~veto_sqqq)
     ]
-    entry_signals = pd.Series(np.select(entry_conds, ['SOXL', 'SOXS'], default='HOLD'), index=df_market.index)
+    entry_signals = pd.Series(np.select(entry_conds, ['TQQQ', 'SQQQ'], default='HOLD'), index=df_market.index)
 
     # 섀도우 백테스트 실행
     print("⏳ [3/3] Baseline(기존 4대 청산) vs Shadow(CVD Smart Exit) 병렬 백테스트 시뮬레이션 집행...")

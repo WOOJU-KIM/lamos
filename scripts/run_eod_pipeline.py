@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 import json
 import sqlite3
@@ -23,7 +23,7 @@ print("=" * 75)
 print("\n[Step 1] 7종 심볼 최신 분봉 데이터 수집 및 DB 적재 (UPSERT)...")
 pipeline = DailyAutoPipeline()
 import subprocess
-subprocess.run([sys.executable, r'C:\Users\chabo\.gemini\antigravity\brain\417a946e-7eca-4e6e-8fb3-7c32dc023187\scratch\run_alpaca_full_sync.py'])
+subprocess.run([sys.executable, str(PROJECT_ROOT / 'scripts' / 'run_alpaca_full_sync.py')])
 harvest_res = {'harvested_at': 'Now', 'total_records_updated': 'ALL'}
 print(f"• 수집 완료 시각: {harvest_res.get('harvested_at')}")
 print(f"• 신규/갱신 적재 레코드: {harvest_res.get('total_records_updated'):,}개")

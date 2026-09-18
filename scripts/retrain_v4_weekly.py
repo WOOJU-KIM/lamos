@@ -16,22 +16,22 @@ def retrain_weekly_v4():
     lake = MarketDataLake()
     
     end_date_str = "2026-09-14 00:00:00"
-    soxl_15m = lake.load_candles("SOXL", "15m")
-    soxl_15m = soxl_15m[soxl_15m['datetime'] < end_date_str].copy()
+    tqqq_15m = lake.load_candles("TQQQ", "15m")
+    tqqq_15m = tqqq_15m[tqqq_15m['datetime'] < end_date_str].copy()
     
     end_dt = pd.to_datetime(end_date_str)
     start_dt = end_dt - timedelta(days=730)
     start_date_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
     
-    soxl_15m = soxl_15m[soxl_15m['datetime'] >= start_date_str].copy()
-    soxl_15m = soxl_15m.sort_values('datetime').reset_index(drop=True)
+    tqqq_15m = tqqq_15m[tqqq_15m['datetime'] >= start_date_str].copy()
+    tqqq_15m = tqqq_15m.sort_values('datetime').reset_index(drop=True)
     
-    print(f"✅ 학습 데이터 기간: {soxl_15m['datetime'].min()} ~ {soxl_15m['datetime'].max()}")
-    print(f"✅ 학습 데이터 캔들 수: {len(soxl_15m)}개")
+    print(f"✅ 학습 데이터 기간: {tqqq_15m['datetime'].min()} ~ {tqqq_15m['datetime'].max()}")
+    print(f"✅ 학습 데이터 캔들 수: {len(tqqq_15m)}개")
     
     orchestrator = MoEMetaOrchestrator(confidence_threshold=0.62, gbdt_threshold=0.62, mode="hybrid_v3")
     print("⏳ GBDT 모델 학습 중...")
-    orchestrator.gbdt_engine.train_and_select_top_features(soxl_15m)
+    orchestrator.gbdt_engine.train_and_select_top_features(tqqq_15m)
     
     model_dir = PROJECT_ROOT / "models"
     model_dir.mkdir(exist_ok=True)

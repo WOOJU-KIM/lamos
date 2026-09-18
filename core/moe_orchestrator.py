@@ -1,3 +1,4 @@
+from config import GBDT_CONFIDENCE_THRESHOLD
 import os
 import sys
 import json
@@ -42,9 +43,9 @@ class MoEMetaOrchestrator:
     """
     def __init__(
         self,
-        confidence_threshold: float = 0.62,
-        cross_asset_threshold: float = 0.60,
-        gbdt_threshold: float = 0.62,
+        confidence_threshold: float = GBDT_CONFIDENCE_THRESHOLD,
+        cross_asset_threshold: float = GBDT_CONFIDENCE_THRESHOLD,
+        gbdt_threshold: float = GBDT_CONFIDENCE_THRESHOLD,
         mode: str = "hybrid_v3"
     ):
         self.confidence_threshold = confidence_threshold
@@ -81,7 +82,7 @@ class MoEMetaOrchestrator:
 
     def compute_regime_vector(self, current_time_str: Optional[str] = None) -> Dict[str, float]:
         """현재 시장의 5대 상태 벡터 산출"""
-        soxl_5m = self.data_lake.load_candles("SOXL", "5m")
+        tqqq_5m = self.data_lake.load_candles("TQQQ", "5m")
         vix_15m = self.data_lake.load_candles("^VIX", "15m")
         nvda_5m = self.data_lake.load_candles("NVDA", "5m")
         qqq_5m = self.data_lake.load_candles("QQQ", "5m")
@@ -100,37 +101,37 @@ class MoEMetaOrchestrator:
             vix_level = float(vix_c.iloc[-1])
 
         atr_ratio = 1.05
-        if not soxl_5m.empty and len(soxl_5m) >= 25:
-            s_h = soxl_5m['High'] if 'High' in soxl_5m else soxl_5m['high']
-            s_l = soxl_5m['Low'] if 'Low' in soxl_5m else soxl_5m['low']
+        if not tqqq_5m.empty and len(tqqq_5m) >= 25:
+            s_h = tqqq_5m['High'] if 'High' in tqqq_5m else tqqq_5m['high']
+            s_l = tqqq_5m['Low'] if 'Low' in tqqq_5m else tqqq_5m['low']
             recent_atr = (s_h - s_l).tail(5).mean()
             avg_atr = (s_h - s_l).tail(25).mean()
             if avg_atr > 0:
                 atr_ratio = round(float(recent_atr / avg_atr), 3)
 
         cvd_delta = 1.28
-        if not soxl_5m.empty and len(soxl_5m) >= 10:
-            s_c = soxl_5m['Close'] if 'Close' in soxl_5m else soxl_5m['close']
-            s_o = soxl_5m['Open'] if 'Open' in soxl_5m else soxl_5m['open']
-            s_h = soxl_5m['High'] if 'High' in soxl_5m else soxl_5m['high']
-            s_l = soxl_5m['Low'] if 'Low' in soxl_5m else soxl_5m['low']
-            s_v = soxl_5m['Volume'] if 'Volume' in soxl_5m else soxl_5m['volume']
+        if not tqqq_5m.empty and len(tqqq_5m) >= 10:
+            s_c = tqqq_5m['Close'] if 'Close' in tqqq_5m else tqqq_5m['close']
+            s_o = tqqq_5m['Open'] if 'Open' in tqqq_5m else tqqq_5m['open']
+            s_h = tqqq_5m['High'] if 'High' in tqqq_5m else tqqq_5m['high']
+            s_l = tqqq_5m['Low'] if 'Low' in tqqq_5m else tqqq_5m['low']
+            s_v = tqqq_5m['Volume'] if 'Volume' in tqqq_5m else tqqq_5m['volume']
             vol_delta = (s_c - s_o) / (s_h - s_l + 1e-6) * s_v
             cvd_delta = round(float(vol_delta.tail(5).mean() / (s_v.tail(20).mean() + 1e-6)), 3)
 
         dislocation_lag = 0.0
         if (
-            not nvda_5m.empty and not qqq_5m.empty and not soxl_5m.empty and
-            len(nvda_5m) >= 5 and len(qqq_5m) >= 5 and len(soxl_5m) >= 5
+            not nvda_5m.empty and not qqq_5m.empty and not tqqq_5m.empty and
+            len(nvda_5m) >= 5 and len(qqq_5m) >= 5 and len(tqqq_5m) >= 5
         ):
             n_c = nvda_5m['Close'] if 'Close' in nvda_5m else nvda_5m['close']
             q_c = qqq_5m['Close'] if 'Close' in qqq_5m else qqq_5m['close']
-            s_c = soxl_5m['Close'] if 'Close' in soxl_5m else soxl_5m['close']
+            s_c = tqqq_5m['Close'] if 'Close' in tqqq_5m else tqqq_5m['close']
             nvda_ret = (n_c.iloc[-1] / n_c.iloc[-5] - 1.0) * 100
             qqq_ret = (q_c.iloc[-1] / q_c.iloc[-5] - 1.0) * 100
-            soxl_ret = (s_c.iloc[-1] / s_c.iloc[-5] - 1.0) * 100
+            tqqq_ret = (s_c.iloc[-1] / s_c.iloc[-5] - 1.0) * 100
             macro_expected = (nvda_ret * 0.6 + qqq_ret * 0.4) * 3.0
-            dislocation_lag = round(float(macro_expected - soxl_ret), 3)
+            dislocation_lag = round(float(macro_expected - tqqq_ret), 3)
 
         return {
             "elapsed_min": elapsed_min,
@@ -235,7 +236,7 @@ class MoEMetaOrchestrator:
             n_c = _get_c("NVDA")
             q_c = _get_c("QQQ")
             v_c = _get_c("VIX")
-            s_c = _get_c("SOXL")
+            s_c = _get_c("TQQQ")
             soxx_c = _get_c("SOXX")
             
             if len(n_c) >= 5 and len(q_c) >= 5 and len(v_c) >= 5 and len(s_c) >= 5:
@@ -243,15 +244,15 @@ class MoEMetaOrchestrator:
                 qqq_r = float(q_c.iloc[-1] / q_c.iloc[-5] - 1.0)
                 vix_r = float(v_c.iloc[-1] / v_c.iloc[-5] - 1.0)
                 soxx_r = float(soxx_c.iloc[-1] / soxx_c.iloc[-5] - 1.0) if not soxx_c.empty else nvda_r
-                soxl_r = float(s_c.iloc[-1] / s_c.iloc[-5] - 1.0)
+                tqqq_r = float(s_c.iloc[-1] / s_c.iloc[-5] - 1.0)
 
                 sig_code, exp_conf, _ = getattr(self, "cross_asset_model", self).predict_signal(
-                    soxl_ret=soxl_r, nvda_ret=nvda_r, soxx_ret=soxx_r, qqq_ret=qqq_r, vix_ret=vix_r, tnx_ret=0.0
+                    tqqq_ret=tqqq_r, nvda_ret=nvda_r, soxx_ret=soxx_r, qqq_ret=qqq_r, vix_ret=vix_r, tnx_ret=0.0
                 ) if hasattr(self, "cross_asset_model") else (0, 0.5, "")
                 
                 conf_cross = exp_conf
-                if sig_code > 0: dir_cross = "LONG_SOXL"
-                elif sig_code < 0: dir_cross = "SHORT_SOXS"
+                if sig_code > 0: dir_cross = "LONG_TQQQ"
+                elif sig_code < 0: dir_cross = "SHORT_SQQQ"
         except Exception as e:
             print("CROSS_ASSET EXCEPTION:", e)
             pass
@@ -260,33 +261,33 @@ class MoEMetaOrchestrator:
         dir_gbdt = "NONE"
         conf_gbdt = 0.50
         try:
-            live_soxl_15m = _get_live_df("SOXL", current_time_str) if "live_prices" in locals() else df_candle_15m
-            gbdt_sig, gbdt_conf, _ = self.gbdt_engine.predict_signal(live_soxl_15m, live_prices=live_prices)
+            live_tqqq_15m = _get_live_df("TQQQ", current_time_str) if "live_prices" in locals() else df_candle_15m
+            gbdt_sig, gbdt_conf, _ = self.gbdt_engine.predict_signal(live_tqqq_15m, live_prices=live_prices)
             conf_gbdt = gbdt_conf
             if gbdt_sig == 1:
-                dir_gbdt = "LONG_SOXL"
+                dir_gbdt = "LONG_TQQQ"
             elif gbdt_sig == -1:
-                dir_gbdt = "SHORT_SOXS"
+                dir_gbdt = "SHORT_SQQQ"
         except Exception:
             pass
 
         is_cross_veto = (
-            (dir_gbdt == "LONG_SOXL" and dir_cross == "SHORT_SOXS") or
-            (dir_gbdt == "SHORT_SOXS" and dir_cross == "LONG_SOXL")
+            (dir_gbdt == "LONG_TQQQ" and dir_cross == "SHORT_SQQQ") or
+            (dir_gbdt == "SHORT_SQQQ" and dir_cross == "LONG_TQQQ")
         )
 
         # 4. [MoE 의사결정 집행]
-        cross_hurdle = getattr(self, "cross_asset_threshold", 0.60)
-        gbdt_hurdle = threshold if threshold is not None else getattr(self, "gbdt_threshold", 0.62)
+        cross_hurdle = getattr(self, "cross_asset_threshold", GBDT_CONFIDENCE_THRESHOLD)
+        gbdt_hurdle = threshold if threshold is not None else getattr(self, "gbdt_threshold", GBDT_CONFIDENCE_THRESHOLD)
 
         if getattr(self, "mode", "hybrid_v3") == "hybrid_v3":
             # -----------------------------------------------------------------
             # [Lumos V3 하이브리드 MoE 의사결정]
-            # - 조건 A (공격수): GBDT가 SOXL 또는 SOXS 방향 제시 및 확신도 >= gbdt_hurdle (0.62)
+            # - 조건 A (공격수): GBDT가 TQQQ 또는 SQQQ 방향 제시 및 확신도 >= gbdt_hurdle (GBDT_CONFIDENCE_THRESHOLD)
             # - 방패(Veto): 크로스에셋 역방향 검출 시 진입 차단 (Veto)
             # - 멀티스크린 필터: SOXX 60분봉 추세 및 5분봉 RSI 눌림목 확인
             # -----------------------------------------------------------------
-            is_gbdt_trigger = (dir_gbdt in ["LONG_SOXL", "SHORT_SOXS"]) and (conf_gbdt >= gbdt_hurdle)
+            is_gbdt_trigger = (dir_gbdt in ["LONG_TQQQ", "SHORT_SQQQ"]) and (conf_gbdt >= gbdt_hurdle)
 
             if is_gbdt_trigger:
                 selected_expert = "hybrid_moe_v3"
@@ -299,7 +300,7 @@ class MoEMetaOrchestrator:
         else:
             # [레거시 안전 모델: 듀얼 합의 (Dual Consensus AND 로직)]
             is_consensus = (
-                dir_cross in ["LONG_SOXL", "SHORT_SOXS"] and
+                dir_cross in ["LONG_TQQQ", "SHORT_SQQQ"] and
                 dir_cross == dir_gbdt and
                 conf_cross >= cross_hurdle and
                 conf_gbdt >= gbdt_hurdle
@@ -309,7 +310,7 @@ class MoEMetaOrchestrator:
                 direction = dir_cross
                 final_conf = max(conf_cross, conf_gbdt)
             else:
-                if dir_cross in ["LONG_SOXL", "SHORT_SOXS"] and dir_gbdt in ["LONG_SOXL", "SHORT_SOXS"] and dir_cross != dir_gbdt:
+                if dir_cross in ["LONG_TQQQ", "SHORT_SQQQ"] and dir_gbdt in ["LONG_TQQQ", "SHORT_SQQQ"] and dir_cross != dir_gbdt:
                     selected_expert = "conflict_rejected"
                 else:
                     selected_expert = "cross_asset" if conf_cross >= conf_gbdt else "gbdt_pattern"
@@ -329,9 +330,9 @@ class MoEMetaOrchestrator:
                 s_c = soxx_60m['Close'] if 'Close' in soxx_60m else soxx_60m['close']
                 soxx_c = s_c.iloc[-1]
                 soxx_ema = s_c.ewm(span=20, adjust=False).mean().iloc[-1]
-                if direction == "LONG_SOXL":
+                if direction == "LONG_TQQQ":
                     is_60m_trend_ok = (soxx_c >= soxx_ema * 0.998)
-                elif direction == "SHORT_SOXS":
+                elif direction == "SHORT_SQQQ":
                     is_60m_trend_ok = (soxx_c <= soxx_ema * 1.002)
         except Exception:
             pass
@@ -342,15 +343,15 @@ class MoEMetaOrchestrator:
         dip_ok = True
         try:
             rsi_5m = float(last_row.get("RSI_14", 50.0))
-            if direction == "LONG_SOXL" and rsi_5m > 68.0:
+            if direction == "LONG_TQQQ" and rsi_5m > 68.0:
                 dip_ok = False
-            elif direction == "SHORT_SOXS" and rsi_5m < 32.0:
+            elif direction == "SHORT_SQQQ" and rsi_5m < 32.0:
                 dip_ok = False
         except Exception:
             pass
 
         # 6. [최종 매수 승인]
-        is_approved = bool(direction in ['LONG_SOXL', 'SHORT_SOXS'] and not is_cross_veto and is_60m_trend_ok and dip_ok)
+        is_approved = bool(direction in ['LONG_TQQQ', 'SHORT_SQQQ'] and not is_cross_veto and is_60m_trend_ok and dip_ok)
         all_confidences = {
             "cross_asset": round(conf_cross, 4),
             "gbdt_pattern": round(conf_gbdt, 4)
@@ -386,13 +387,13 @@ class MoEMetaOrchestrator:
 
         return decision_meta
 
-def train_and_save_moe_orchestrator(confidence_threshold: float = 0.62, mode: str = "hybrid_v3") -> MoEMetaOrchestrator:
+def train_and_save_moe_orchestrator(confidence_threshold: float = GBDT_CONFIDENCE_THRESHOLD, mode: str = "hybrid_v3") -> MoEMetaOrchestrator:
     print(f"🚀 [훈련 개시] Lumos 듀얼 챔피언 MoE 스나이퍼 학습 중... (임계값 {confidence_threshold*100:.0f}%)")
     orchestrator = MoEMetaOrchestrator(confidence_threshold=confidence_threshold, gbdt_threshold=confidence_threshold, mode=mode)
     data_lake = MarketDataLake()
-    soxl_15m = data_lake.load_candles("SOXL", "15m")
-    if not soxl_15m.empty and len(soxl_15m) >= 100:
-        orchestrator.gbdt_engine.train_and_select_top_features(soxl_15m)
+    tqqq_15m = data_lake.load_candles("TQQQ", "15m")
+    if not tqqq_15m.empty and len(tqqq_15m) >= 100:
+        orchestrator.gbdt_engine.train_and_select_top_features(tqqq_15m)
 
     # 1. 신규 메인 실전 하이브리드 V3 모델 저장
     joblib.dump(orchestrator, MOE_MODEL_PATH)
@@ -400,7 +401,7 @@ def train_and_save_moe_orchestrator(confidence_threshold: float = 0.62, mode: st
     print(f"✅ [Lumos V3 하이브리드 MoE (GBDT 60% + Cross-Asset Veto) 실전 모델 저장 완료] ➔ {MOE_MODEL_PATH}")
 
     # 2. 레거시 안전 모델(100% 동시합의)도 독립 파일로 영구 동시 보존
-    safe_orchestrator = MoEMetaOrchestrator(confidence_threshold=0.60, gbdt_threshold=0.60, mode="legacy_dual_consensus")
+    safe_orchestrator = MoEMetaOrchestrator(confidence_threshold=GBDT_CONFIDENCE_THRESHOLD, gbdt_threshold=GBDT_CONFIDENCE_THRESHOLD, mode="legacy_dual_consensus")
     safe_orchestrator.gbdt_engine = orchestrator.gbdt_engine
     safe_path = Path(__file__).resolve().parent.parent / "models" / "model_moe_legacy_safe.pkl"
     safe_champ_path = Path(__file__).resolve().parent.parent / "models" / "model_champion_legacy_safe.pkl"
@@ -413,8 +414,8 @@ def train_and_save_moe_orchestrator(confidence_threshold: float = 0.62, mode: st
 if __name__ == "__main__":
     moe = train_and_save_moe_orchestrator()
     lake = MarketDataLake()
-    soxl = lake.load_candles("SOXL", "15m")
-    sample_eval = moe.evaluate_dual_filter_signal(soxl)
+    tqqq = lake.load_candles("TQQQ", "15m")
+    sample_eval = moe.evaluate_dual_filter_signal(tqqq)
     print("Lumos V3 Hybrid MoE Sample Decision:")
     print(json.dumps(sample_eval, indent=2, ensure_ascii=False))
 

@@ -32,9 +32,9 @@ for d_str in sorted(df['date'].unique()):
             bars_held = b_idx - active_pos['entry_bar_idx'] + 1
             sym = active_pos['symbol']
             buy_px = active_pos['buy_price']
-            cur_h = row['high'] if sym == 'SOXL' else row['soxs_high']
-            cur_l = row['low'] if sym == 'SOXL' else row['soxs_low']
-            cur_c = row['close'] if sym == 'SOXL' else row['soxs_close']
+            cur_h = row['high'] if sym == 'TQQQ' else row['sqqq_high']
+            cur_l = row['low'] if sym == 'TQQQ' else row['sqqq_low']
+            cur_c = row['close'] if sym == 'TQQQ' else row['sqqq_close']
 
             max_ret = (cur_h - buy_px) / buy_px
             min_ret = (cur_l - buy_px) / buy_px
@@ -78,8 +78,8 @@ for d_str in sorted(df['date'].unique()):
 
         if active_pos is None and time_str <= '14:30' and b_idx >= 1:
             sig = signals.loc[dt]
-            if sig in ['SOXL', 'SOXS']:
-                trend_ok = row['trend_ok_soxl'] if sig == 'SOXL' else row['trend_ok_soxs']
+            if sig in ['TQQQ', 'SQQQ']:
+                trend_ok = row['trend_ok_tqqq'] if sig == 'TQQQ' else row['trend_ok_sqqq']
                 if not trend_ok:
                     continue
                 vwap_diff = row['VWAP_Diff']
@@ -92,7 +92,7 @@ for d_str in sorted(df['date'].unique()):
                 if not dip_ok:
                     continue
 
-                base_px = row['close'] if sig == 'SOXL' else row['soxs_close']
+                base_px = row['close'] if sig == 'TQQQ' else row['sqqq_close']
                 entry_px = round(base_px + SLIPPAGE_PAYUP, 2)
                 shares = int(capital / entry_px)
                 invested = shares * entry_px

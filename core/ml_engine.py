@@ -1,3 +1,4 @@
+from config import GBDT_CONFIDENCE_THRESHOLD
 import warnings
 import numpy as np
 import pandas as pd
@@ -17,7 +18,7 @@ class MLFeatureEngine:
     5. 가격 구조: 캔들 몸통/꼬리 비율, 직전 N개 봉 변동률
     6. LightGBM 모델 학습을 통한 Top 10 핵심 보조지표 자동 선별 및 60% 확신도(Confidence) 산출
     """
-    def __init__(self, confidence_threshold: float = 0.65):
+    def __init__(self, confidence_threshold: float = GBDT_CONFIDENCE_THRESHOLD):
         self.confidence_threshold = confidence_threshold
         self.model = None
         self.top_10_features: List[str] = []
@@ -238,10 +239,10 @@ class MLFeatureEngine:
                                        on='datetime_dt', direction='backward')
                     
             # 패닉 시그널 및 상대 강도 파생 변수
-            df['soxl_ret_20'] = df['Close'].pct_change(20) * 100.0
-            df['soxl_ret_5'] = df['Close'].pct_change(5) * 100.0
-            df['soxl_vs_qqq_20'] = df['soxl_ret_20'] - df.get('qqq_ret_20', pd.Series(0.0, index=df.index)).fillna(0)
-            df['soxl_vs_qqq_5'] = df['soxl_ret_5'] - df.get('qqq_ret_5', pd.Series(0.0, index=df.index)).fillna(0)
+            df['tqqq_ret_20'] = df['Close'].pct_change(20) * 100.0
+            df['tqqq_ret_5'] = df['Close'].pct_change(5) * 100.0
+            df['tqqq_vs_qqq_20'] = df['tqqq_ret_20'] - df.get('qqq_ret_20', pd.Series(0.0, index=df.index)).fillna(0)
+            df['tqqq_vs_qqq_5'] = df['tqqq_ret_5'] - df.get('qqq_ret_5', pd.Series(0.0, index=df.index)).fillna(0)
             df['panic_signal'] = (
                 (df.get('vixy_ret_1', pd.Series(0.0, index=df.index)).fillna(0) > 0).astype(int) + 
                 (df.get('ief_ret_1', pd.Series(0.0, index=df.index)).fillna(0) > 0).astype(int)
@@ -269,8 +270,8 @@ class MLFeatureEngine:
     ) -> pd.Series:
         """
         [경로 의존적 Triple Barrier 3-Class 정답지 산출]
-        - Class 1 (SOXL 롱): 90분(6개 봉) 내 Low가 -2.0%에 닿기 전에 High가 +3.0%를 먼저 터치
-        - Class -1 (SOXS 숏): 90분(6개 봉) 내 High가 +2.0%에 닿기 전에 Low가 -3.0%를 먼저 터치 (SOXL 하락)
+        - Class 1 (TQQQ 롱): 90분(6개 봉) 내 Low가 -2.0%에 닿기 전에 High가 +3.0%를 먼저 터치
+        - Class -1 (SQQQ 숏): 90분(6개 봉) 내 High가 +2.0%에 닿기 전에 Low가 -3.0%를 먼저 터치 (TQQQ 하락)
         - Class 0 (관망): 6개 봉 내 양방향 타겟 미도달 (타임스탑 청산 또는 횡보)
         """
         n = len(df)
@@ -301,11 +302,11 @@ class MLFeatureEngine:
                 hit_short_sl = (h_ret >= stop_loss)
 
                 if hit_long_tp and not hit_long_sl:
-                    labels[i] = 1   # SOXL 롱 승리
+                    labels[i] = 1   # TQQQ 롱 승리
                     assigned = True
                     break
                 elif hit_short_tp and not hit_short_sl:
-                    labels[i] = -1  # SOXS 숏 승리
+                    labels[i] = -1  # SQQQ 숏 승리
                     assigned = True
                     break
                 elif (hit_long_sl and hit_short_sl) or (hit_long_tp and hit_long_sl) or (hit_short_tp and hit_short_sl):
@@ -373,12 +374,12 @@ class MLFeatureEngine:
                 except Exception:
                     continue
 
-                sym = str(row.get("symbol", "SOXL")).upper()
+                sym = str(row.get("symbol", "TQQQ")).upper()
                 reason = str(row.get("exit_reason", "")).upper()
                 pnl = float(row.get("pnl_pct", 0.0))
 
                 # 라벨 결정: 2(Long TP), 0(Short TP), 1(중립/타임스탑)
-                if sym == "SOXL":
+                if sym == "TQQQ":
                     tgt = 2 if ("TP" in reason or pnl >= 2.0) else (0 if ("SL" in reason or pnl <= -1.5) else 1)
                 else:
                     tgt = 0 if ("TP" in reason or pnl >= 2.0) else (2 if ("SL" in reason or pnl <= -1.5) else 1)
@@ -464,12 +465,12 @@ class MLFeatureEngine:
                     # 3-Class Calibration: 33.3% 기준선 -> 50%~95% 스케일링
                     calib_conf = min(0.95, max(0.50, 0.50 + (pl - 0.333) * 1.15))
                     confidences[idx] = calib_conf
-                    directions[idx] = "LONG_SOXL"
+                    directions[idx] = "LONG_TQQQ"
                 elif ps > pn and ps > pl:
                     signals[idx] = -1
                     calib_conf = min(0.95, max(0.50, 0.50 + (ps - 0.333) * 1.15))
                     confidences[idx] = calib_conf
-                    directions[idx] = "SHORT_SOXS"
+                    directions[idx] = "SHORT_SQQQ"
                 else:
                     signals[idx] = 0
                     confidences[idx] = pn
@@ -512,8 +513,8 @@ class MLFeatureEngine:
         p_short = float(last_row.get("Prob_Short", 0.33))
 
         if sig == 1:
-            return 1, conf, f"GBDT 3-Class SOXL 롱 파형 포착 (P_Long={p_long*100:.1f}%, Conf={conf*100:.1f}%)"
+            return 1, conf, f"GBDT 3-Class TQQQ 롱 파형 포착 (P_Long={p_long*100:.1f}%, Conf={conf*100:.1f}%)"
         elif sig == -1:
-            return -1, conf, f"GBDT 3-Class SOXS 숏 파형 포착 (P_Short={p_short*100:.1f}%, Conf={conf*100:.1f}%)"
+            return -1, conf, f"GBDT 3-Class SQQQ 숏 파형 포착 (P_Short={p_short*100:.1f}%, Conf={conf*100:.1f}%)"
 
         return 0, conf, "GBDT 관망/중립 상태"

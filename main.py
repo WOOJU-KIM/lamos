@@ -15,7 +15,7 @@ if sys.platform.startswith('win'):
 
 def main():
     print("=" * 75)
-    print("🏛  [SOXL / SOXS 머신러닝 3중 타임프레임 & 100% 챔피언 관제 시스템]  🏛")
+    print("🏛  [TQQQ / SQQQ 머신러닝 3중 타임프레임 & 100% 챔피언 관제 시스템]  🏛")
     print("=" * 75)
 
     # 1. 챔피언 설정 백테스트 실행 (100% 전액 투입, 90분 타임스탑, 65% 확신도)
@@ -30,7 +30,7 @@ def main():
     print(f"   👉 시작 원금: {bt_results['initial_capital_krw']:,}원 ➡️ 최종 잔고: {bt_results['final_capital_krw']:,}원")
     print(f"   👉 누적 손익: {bt_results['total_pnl_krw']:+,}원 ({bt_results['total_return_pct']:+.2f}%) | 승률: {bt_results['win_rate_pct']}% | MDD: {bt_results['mdd_pct']}%")
     print(f"   👉 총 거래 횟수: {bt_results['total_trades_count']}회 ({bt_results['total_wins']}승 {bt_results['total_losses']}패)")
-    print(f"   👉 SOXL 승률: {bt_results['soxl_win_rate_pct']}% | SOXS 승률: {bt_results['soxs_win_rate_pct']}% | PF: {bt_results['profit_factor']}")
+    print(f"   👉 TQQQ 승률: {bt_results['tqqq_win_rate_pct']}% | SQQQ 승률: {bt_results['sqqq_win_rate_pct']}% | PF: {bt_results['profit_factor']}")
     print("✅ 챔피언 Baseline 백테스팅 완료")
 
     # 2. 손익금 병기 성적표 텔레그램 발송

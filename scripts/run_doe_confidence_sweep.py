@@ -60,19 +60,19 @@ def run_doe_confidence_sweep():
     lake = MarketDataLake()
     print("⏳ [1/4] 데이터 레이크에서 15m/60m/5m 전 기간 시계열 데이터 로드 중...")
     
-    soxl_15m = lake.load_candles("SOXL", "15m")
-    soxs_15m = lake.load_candles("SOXS", "15m")
-    soxl_5m  = lake.load_candles("SOXL", "5m")
-    soxs_5m  = lake.load_candles("SOXS", "5m")
+    tqqq_15m = lake.load_candles("TQQQ", "15m")
+    sqqq_15m = lake.load_candles("SQQQ", "15m")
+    tqqq_5m  = lake.load_candles("TQQQ", "5m")
+    sqqq_5m  = lake.load_candles("SQQQ", "5m")
     soxx_60m = lake.load_candles("SOXX", "60m")
-    soxl_60m = lake.load_candles("SOXL", "60m")
+    tqqq_60m = lake.load_candles("TQQQ", "60m")
     nvda_15m = lake.load_candles("NVDA", "15m")
     qqq_15m  = lake.load_candles("QQQ", "15m")
     vix_15m  = lake.load_candles("^VIX", "15m")
     soxx_15m = lake.load_candles("SOXX", "15m")
 
     # 일자/시간 문자열 생성
-    for df in [soxl_15m, soxs_15m, soxl_5m, soxs_5m, soxx_60m, soxl_60m, soxx_15m, nvda_15m, qqq_15m, vix_15m]:
+    for df in [tqqq_15m, sqqq_15m, tqqq_5m, sqqq_5m, soxx_60m, tqqq_60m, soxx_15m, nvda_15m, qqq_15m, vix_15m]:
         if 'datetime' in df.columns:
             df['datetime_dt'] = pd.to_datetime(df['datetime'])
             df['date_str'] = df['datetime_dt'].dt.strftime('%Y-%m-%d')
@@ -82,15 +82,15 @@ def run_doe_confidence_sweep():
             df['date_str'] = df['datetime_dt'].dt.strftime('%Y-%m-%d')
             df['time_str'] = df['datetime_dt'].dt.strftime('%H:%M')
 
-    unique_dates = sorted(soxl_15m['date_str'].unique())
+    unique_dates = sorted(tqqq_15m['date_str'].unique())
     num_days = len(unique_dates)
     total_weeks = num_days / 5.0
-    start_dt = soxl_15m['datetime'].iloc[0]
-    end_dt = soxl_15m['datetime'].iloc[-1]
+    start_dt = tqqq_15m['datetime'].iloc[0]
+    end_dt = tqqq_15m['datetime'].iloc[-1]
 
     print(f"   • 데이터 범위: {start_dt} ~ {end_dt}")
     print(f"   • 총 거래일: {num_days}일 (약 {total_weeks:.1f}주, {num_days/21:.1f}개월)")
-    print(f"   • 캔들 수량: 15분봉 {len(soxl_15m):,}개 | 5분봉 {len(soxl_5m):,}개 | 60분봉 {len(soxl_60m):,}개")
+    print(f"   • 캔들 수량: 15분봉 {len(tqqq_15m):,}개 | 5분봉 {len(tqqq_5m):,}개 | 60분봉 {len(tqqq_60m):,}개")
 
     # -------------------------------------------------------------------------
     # 2. 고속 백테스트를 위한 피처 & 인디케이터 사전 계산 (Precomputations)
@@ -99,18 +99,18 @@ def run_doe_confidence_sweep():
     
     # 60분봉 EMA20
     soxx_60m['ema20'] = soxx_60m['Close'].ewm(span=20, adjust=False).mean()
-    soxl_60m['ema20'] = soxl_60m['Close'].ewm(span=20, adjust=False).mean()
+    tqqq_60m['ema20'] = tqqq_60m['Close'].ewm(span=20, adjust=False).mean()
 
     # MoE 모델 및 GBDT 엔진 초기화
     moe = MoEMetaOrchestrator(confidence_threshold=0.55, gbdt_threshold=0.55, mode="hybrid_v3")
     
-    # SOXL 15분봉 피처 및 GBDT 확률/확신도
-    soxl_15m_feat = moe.gbdt_engine.extract_features(soxl_15m)
-    soxl_15m_feat = moe.gbdt_engine.add_confidence_columns(soxl_15m_feat)
+    # TQQQ 15분봉 피처 및 GBDT 확률/확신도
+    tqqq_15m_feat = moe.gbdt_engine.extract_features(tqqq_15m)
+    tqqq_15m_feat = moe.gbdt_engine.add_confidence_columns(tqqq_15m_feat)
     
-    # SOXS 15분봉 피처 (Screen 3 단기 눌림목 검증용)
-    soxs_15m_feat = moe.gbdt_engine.extract_features(soxs_15m)
-    soxs_15m_feat.set_index('datetime', inplace=True, drop=False)
+    # SQQQ 15분봉 피처 (Screen 3 단기 눌림목 검증용)
+    sqqq_15m_feat = moe.gbdt_engine.extract_features(sqqq_15m)
+    sqqq_15m_feat.set_index('datetime', inplace=True, drop=False)
 
     # 크로스에셋 인과 괴리 모델 신호 사전 계산
     cross_mod = CrossAssetDislocationModel(dislocation_z_threshold=1.6)
@@ -122,21 +122,21 @@ def run_doe_confidence_sweep():
     soxx_map = soxx_15m.set_index('datetime')['Close'].to_dict() if not soxx_15m.empty else {}
     qqq_map  = qqq_15m.set_index('datetime')['Close'].to_dict()
     vix_map  = vix_15m.set_index('datetime')['Close'].to_dict()
-    soxl_close_list = soxl_15m['Close'].values
-    soxl_dt_list = soxl_15m['datetime'].values
+    tqqq_close_list = tqqq_15m['Close'].values
+    tqqq_dt_list = tqqq_15m['datetime'].values
 
     # 5개봉 전 수익률 계산을 위한 인덱싱
-    for i in range(len(soxl_15m)):
+    for i in range(len(tqqq_15m)):
         if i < 5:
             cross_dirs.append("NONE")
             cross_confs.append(0.50)
             continue
             
-        cur_t = soxl_dt_list[i]
-        past_5_t = soxl_dt_list[i-5]
+        cur_t = tqqq_dt_list[i]
+        past_5_t = tqqq_dt_list[i-5]
 
-        # SOXL 5개봉 수익률
-        s_r = float(soxl_close_list[i] / soxl_close_list[i-5] - 1.0)
+        # TQQQ 5개봉 수익률
+        s_r = float(tqqq_close_list[i] / tqqq_close_list[i-5] - 1.0)
         
         # NVDA, SOXX, QQQ, VIX 가격 확인
         if (cur_t in nvda_map and past_5_t in nvda_map and 
@@ -147,14 +147,14 @@ def run_doe_confidence_sweep():
             q_r = float(qqq_map[cur_t] / qqq_map[past_5_t] - 1.0)
             v_r = float(vix_map[cur_t] / vix_map[past_5_t] - 1.0)
             sig_code, exp_conf, _ = cross_mod.predict_signal(
-                soxl_ret=s_r,
+                tqqq_ret=s_r,
                 nvda_ret=n_r,
                 soxx_ret=sx_r,
                 qqq_ret=q_r,
                 vix_ret=v_r,
                 tnx_ret=0.0
             )
-            c_dir = "LONG_SOXL" if sig_code > 0 else ("SHORT_SOXS" if sig_code < 0 else "NONE")
+            c_dir = "LONG_TQQQ" if sig_code > 0 else ("SHORT_SQQQ" if sig_code < 0 else "NONE")
             c_conf = exp_conf
         else:
             c_dir = "NONE"
@@ -163,9 +163,9 @@ def run_doe_confidence_sweep():
         cross_dirs.append(c_dir)
         cross_confs.append(c_conf)
 
-    soxl_15m_feat['cross_dir'] = cross_dirs
-    soxl_15m_feat['cross_conf'] = cross_confs
-    soxl_15m_feat.set_index('datetime', inplace=True, drop=False)
+    tqqq_15m_feat['cross_dir'] = cross_dirs
+    tqqq_15m_feat['cross_conf'] = cross_confs
+    tqqq_15m_feat.set_index('datetime', inplace=True, drop=False)
 
     print("   • 사전 계산 완료: 2,085개 캔들에 대한 GBDT 확신도 및 Cross-Asset 방향 매핑 완료")
 
@@ -185,8 +185,8 @@ def run_doe_confidence_sweep():
     print("\n⏳ [3/4] 7개 확신도(50%~80%) DoE 시나리오 5분봉 정밀 궤적(Path Dissection) 시뮬레이션 가동 중...")
 
     # 5분봉 빠른 조회를 위해 datetime을 인덱스로 설정
-    soxl_5m_indexed = soxl_5m.set_index('datetime', drop=False)
-    soxs_5m_indexed = soxs_5m.set_index('datetime', drop=False)
+    tqqq_5m_indexed = tqqq_5m.set_index('datetime', drop=False)
+    sqqq_5m_indexed = sqqq_5m.set_index('datetime', drop=False)
 
     all_doe_results = []
     trades_by_threshold = {}
@@ -200,22 +200,22 @@ def run_doe_confidence_sweep():
         current_day_str = ""
 
         for d_str in unique_dates:
-            day_soxl_15 = soxl_15m_feat[soxl_15m_feat['date_str'] == d_str]
-            if len(day_soxl_15) < 5:
+            day_tqqq_15 = tqqq_15m_feat[tqqq_15m_feat['date_str'] == d_str]
+            if len(day_tqqq_15) < 5:
                 continue
 
-            day_soxl_5 = soxl_5m[soxl_5m['date_str'] == d_str]
-            day_soxs_5 = soxs_5m[soxs_5m['date_str'] == d_str]
+            day_tqqq_5 = tqqq_5m[tqqq_5m['date_str'] == d_str]
+            day_sqqq_5 = sqqq_5m[sqqq_5m['date_str'] == d_str]
 
             # [인터락 5] 매 정규장 개장 시 일일 서킷 브레이커 손절 카운트 0 리셋
             daily_stoploss_count = 0
 
             active_pos = None
             b_idx = 0
-            n_bars = len(day_soxl_15)
+            n_bars = len(day_tqqq_15)
 
             while b_idx < n_bars:
-                cur_15m_row = day_soxl_15.iloc[b_idx]
+                cur_15m_row = day_tqqq_15.iloc[b_idx]
                 cur_15m_time = cur_15m_row['datetime']
                 time_str = cur_15m_row['time_str']
 
@@ -238,12 +238,12 @@ def run_doe_confidence_sweep():
                 dir_cross = cur_15m_row['cross_dir']
 
                 # 조건 A (공격수 트리거): GBDT 방향 제시 및 확신도 >= T
-                is_gbdt_trigger = (dir_gbdt in ["LONG_SOXL", "SHORT_SOXS"]) and (conf_gbdt >= T)
+                is_gbdt_trigger = (dir_gbdt in ["LONG_TQQQ", "SHORT_SQQQ"]) and (conf_gbdt >= T)
 
                 # 조건 B (크로스에셋 역풍 방패): 정반대 방향일 때만 Veto 차단
                 is_cross_veto = (
-                    (dir_gbdt == "LONG_SOXL" and dir_cross == "SHORT_SOXS") or
-                    (dir_gbdt == "SHORT_SOXS" and dir_cross == "LONG_SOXL")
+                    (dir_gbdt == "LONG_TQQQ" and dir_cross == "SHORT_SQQQ") or
+                    (dir_gbdt == "SHORT_SQQQ" and dir_cross == "LONG_TQQQ")
                 )
 
                 if not is_gbdt_trigger or is_cross_veto:
@@ -257,18 +257,18 @@ def run_doe_confidence_sweep():
                 # -------------------------------------------------------------
                 # Screen 1: 60분봉 상위 추세 필터
                 past_soxx_60 = soxx_60m[soxx_60m['datetime'] <= cur_15m_time]
-                past_soxl_60 = soxl_60m[soxl_60m['datetime'] <= cur_15m_time]
+                past_tqqq_60 = tqqq_60m[tqqq_60m['datetime'] <= cur_15m_time]
 
                 is_60m_trend_ok = True
-                if len(past_soxx_60) >= 20 and len(past_soxl_60) >= 20:
+                if len(past_soxx_60) >= 20 and len(past_tqqq_60) >= 20:
                     soxx_c = past_soxx_60['Close'].iloc[-1]
-                    soxl_c = past_soxl_60['Close'].iloc[-1]
+                    tqqq_c = past_tqqq_60['Close'].iloc[-1]
                     soxx_ema20 = past_soxx_60['ema20'].iloc[-1]
-                    soxl_ema20 = past_soxl_60['ema20'].iloc[-1]
+                    tqqq_ema20 = past_tqqq_60['ema20'].iloc[-1]
 
-                    if direction == "LONG_SOXL":
-                        is_60m_trend_ok = (soxx_c >= soxx_ema20 * 0.998) and (soxl_c >= soxl_ema20 * 0.998)
-                    elif direction == "SHORT_SOXS":
+                    if direction == "LONG_TQQQ":
+                        is_60m_trend_ok = (soxx_c >= soxx_ema20 * 0.998) and (tqqq_c >= tqqq_ema20 * 0.998)
+                    elif direction == "SHORT_SQQQ":
                         is_60m_trend_ok = (soxx_c <= soxx_ema20 * 1.002)
 
                 if not is_60m_trend_ok:
@@ -276,7 +276,7 @@ def run_doe_confidence_sweep():
                     continue
 
                 # Screen 3: 단기 눌림목 타점 필터
-                if direction == "LONG_SOXL":
+                if direction == "LONG_TQQQ":
                     vwap_diff = float(cur_15m_row.get("VWAP_Diff", 0.0))
                     rsi_14 = float(cur_15m_row.get("RSI_14", 50.0))
                     bb_lower = float(cur_15m_row.get("BB_Lower", 0.0))
@@ -285,8 +285,8 @@ def run_doe_confidence_sweep():
                     if bb_lower > 0:
                         dip_ok = dip_ok and (cur_close >= bb_lower * 1.001)
                 else:
-                    if cur_15m_time in soxs_15m_feat.index:
-                        row_s = soxs_15m_feat.loc[cur_15m_time]
+                    if cur_15m_time in sqqq_15m_feat.index:
+                        row_s = sqqq_15m_feat.loc[cur_15m_time]
                         vwap_diff = float(row_s.get("VWAP_Diff", 0.0))
                         rsi_14 = float(row_s.get("RSI_14", 50.0))
                         bb_lower = float(row_s.get("BB_Lower", 0.0))
@@ -304,14 +304,14 @@ def run_doe_confidence_sweep():
                 # -------------------------------------------------------------
                 # [진입 집행: 3대 인터락 완결 승인]
                 # -------------------------------------------------------------
-                chosen_symbol = "SOXL" if direction == "LONG_SOXL" else "SOXS"
+                chosen_symbol = "TQQQ" if direction == "LONG_TQQQ" else "SQQQ"
                 
                 # 진입 기준 가격 (페이업 +$0.03 반영)
-                if chosen_symbol == "SOXL":
+                if chosen_symbol == "TQQQ":
                     base_px = float(cur_15m_row['Close'])
                 else:
-                    if cur_15m_time in soxs_15m_feat.index:
-                        base_px = float(soxs_15m_feat.loc[cur_15m_time]['Close'])
+                    if cur_15m_time in sqqq_15m_feat.index:
+                        base_px = float(sqqq_15m_feat.loc[cur_15m_time]['Close'])
                     else:
                         base_px = 40.0
 
@@ -326,7 +326,7 @@ def run_doe_confidence_sweep():
                 # -------------------------------------------------------------
                 # [5분봉 정밀 궤적 추적(Path Dissection) 청산 감시]
                 # -------------------------------------------------------------
-                target_5m_df = day_soxl_5 if chosen_symbol == "SOXL" else day_soxs_5
+                target_5m_df = day_tqqq_5 if chosen_symbol == "TQQQ" else day_sqqq_5
                 post_5m = target_5m_df[target_5m_df['datetime'] > cur_15m_time]
 
                 if post_5m.empty:
@@ -454,13 +454,13 @@ def run_doe_confidence_sweep():
         loss_count = len(losses)
         win_rate = (win_count / total_trades * 100.0) if total_trades > 0 else 0.0
 
-        soxl_trades = [t for t in trades if t['symbol'] == "SOXL"]
-        soxs_trades = [t for t in trades if t['symbol'] == "SOXS"]
-        soxl_wins = [t for t in soxl_trades if t['pnl_usd'] > 0]
-        soxs_wins = [t for t in soxs_trades if t['pnl_usd'] > 0]
+        tqqq_trades = [t for t in trades if t['symbol'] == "TQQQ"]
+        sqqq_trades = [t for t in trades if t['symbol'] == "SQQQ"]
+        tqqq_wins = [t for t in tqqq_trades if t['pnl_usd'] > 0]
+        sqqq_wins = [t for t in sqqq_trades if t['pnl_usd'] > 0]
 
-        soxl_wr = (len(soxl_wins) / len(soxl_trades) * 100.0) if len(soxl_trades) > 0 else 0.0
-        soxs_wr = (len(soxs_wins) / len(soxs_trades) * 100.0) if len(soxs_trades) > 0 else 0.0
+        tqqq_wr = (len(tqqq_wins) / len(tqqq_trades) * 100.0) if len(tqqq_trades) > 0 else 0.0
+        sqqq_wr = (len(sqqq_wins) / len(sqqq_trades) * 100.0) if len(sqqq_trades) > 0 else 0.0
 
         total_gain = sum(t['pnl_usd'] for t in wins)
         total_loss = abs(sum(t['pnl_usd'] for t in losses))
@@ -503,10 +503,10 @@ def run_doe_confidence_sweep():
             "wins": win_count,
             "losses": loss_count,
             "win_rate": round(win_rate, 2),
-            "soxl_trades": len(soxl_trades),
-            "soxl_win_rate": round(soxl_wr, 1),
-            "soxs_trades": len(soxs_trades),
-            "soxs_win_rate": round(soxs_wr, 1),
+            "tqqq_trades": len(tqqq_trades),
+            "tqqq_win_rate": round(tqqq_wr, 1),
+            "sqqq_trades": len(sqqq_trades),
+            "sqqq_win_rate": round(sqqq_wr, 1),
             "tp_count": len(tp_trades),
             "sl_count": len(sl_trades),
             "timestop_count": len(timestop_trades),
@@ -532,7 +532,7 @@ def run_doe_confidence_sweep():
 
     headers = [
         "확신도", "총거래", "주당거래", "승 / 패", "승률(%)", 
-        "SOXL(건/승률)", "SOXS(건/승률)", "누적수익률", "손익비(PF)", "MDD(%)", "최종자본금($)", "종합 판정"
+        "TQQQ(건/승률)", "SQQQ(건/승률)", "누적수익률", "손익비(PF)", "MDD(%)", "최종자본금($)", "종합 판정"
     ]
     aligns = [":---:", ":---:", ":---:", ":---:", ":---:", ":---:", ":---:", "---:", ":---:", ":---:", "---:", ":---"]
 
@@ -544,8 +544,8 @@ def run_doe_confidence_sweep():
             f"{m['trades_per_week']}회",
             f"{m['wins']}승 {m['losses']}패",
             f"{m['win_rate']:.1f}%",
-            f"{m['soxl_trades']}건 ({m['soxl_win_rate']}%)",
-            f"{m['soxs_trades']}건 ({m['soxs_win_rate']}%)",
+            f"{m['tqqq_trades']}건 ({m['tqqq_win_rate']}%)",
+            f"{m['sqqq_trades']}건 ({m['sqqq_win_rate']}%)",
             f"{m['cum_return_pct']:+.2f}%",
             f"{m['profit_factor']:.2f}",
             f"{m['mdd_pct']:.2f}%",

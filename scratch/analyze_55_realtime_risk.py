@@ -12,47 +12,47 @@ from core.moe_orchestrator import MoEMetaOrchestrator
 from core.heterogeneous_models import CrossAssetDislocationModel
 
 lake = MarketDataLake()
-soxl_15m = lake.load_candles("SOXL", "15m")
-soxs_15m = lake.load_candles("SOXS", "15m")
-soxl_5m  = lake.load_candles("SOXL", "5m")
-soxs_5m  = lake.load_candles("SOXS", "5m")
+tqqq_15m = lake.load_candles("TQQQ", "15m")
+sqqq_15m = lake.load_candles("SQQQ", "15m")
+tqqq_5m  = lake.load_candles("TQQQ", "5m")
+sqqq_5m  = lake.load_candles("SQQQ", "5m")
 soxx_60m = lake.load_candles("SOXX", "60m")
-soxl_60m = lake.load_candles("SOXL", "60m")
+tqqq_60m = lake.load_candles("TQQQ", "60m")
 nvda_15m = lake.load_candles("NVDA", "15m")
 qqq_15m  = lake.load_candles("QQQ", "15m")
 vix_15m  = lake.load_candles("^VIX", "15m")
 
-for df in [soxl_15m, soxs_15m, soxl_5m, soxs_5m, soxx_60m, soxl_60m, nvda_15m, qqq_15m, vix_15m]:
+for df in [tqqq_15m, sqqq_15m, tqqq_5m, sqqq_5m, soxx_60m, tqqq_60m, nvda_15m, qqq_15m, vix_15m]:
     df['datetime_dt'] = pd.to_datetime(df['datetime'])
     df['date_str'] = df['datetime_dt'].dt.strftime('%Y-%m-%d')
     df['time_str'] = df['datetime_dt'].dt.strftime('%H:%M')
 
-unique_dates = sorted(soxl_15m['date_str'].unique())
+unique_dates = sorted(tqqq_15m['date_str'].unique())
 soxx_60m['ema20'] = soxx_60m['Close'].ewm(span=20, adjust=False).mean()
-soxl_60m['ema20'] = soxl_60m['Close'].ewm(span=20, adjust=False).mean()
+tqqq_60m['ema20'] = tqqq_60m['Close'].ewm(span=20, adjust=False).mean()
 
 moe = MoEMetaOrchestrator(confidence_threshold=0.55, gbdt_threshold=0.55, mode="hybrid_v3")
-soxl_15m_feat = moe.gbdt_engine.extract_features(soxl_15m)
-soxl_15m_feat = moe.gbdt_engine.add_confidence_columns(soxl_15m_feat)
-soxs_15m_feat = moe.gbdt_engine.extract_features(soxs_15m)
-soxs_15m_feat.set_index('datetime', inplace=True, drop=False)
+tqqq_15m_feat = moe.gbdt_engine.extract_features(tqqq_15m)
+tqqq_15m_feat = moe.gbdt_engine.add_confidence_columns(tqqq_15m_feat)
+sqqq_15m_feat = moe.gbdt_engine.extract_features(sqqq_15m)
+sqqq_15m_feat.set_index('datetime', inplace=True, drop=False)
 
 cross_mod = CrossAssetDislocationModel(dislocation_z_threshold=1.6)
 cross_dirs, cross_confs = [], []
 nvda_map = nvda_15m.set_index('datetime')['Close'].to_dict()
 qqq_map  = qqq_15m.set_index('datetime')['Close'].to_dict()
 vix_map  = vix_15m.set_index('datetime')['Close'].to_dict()
-soxl_close_list = soxl_15m['Close'].values
-soxl_dt_list = soxl_15m['datetime'].values
+tqqq_close_list = tqqq_15m['Close'].values
+tqqq_dt_list = tqqq_15m['datetime'].values
 
-for i in range(len(soxl_15m)):
+for i in range(len(tqqq_15m)):
     if i < 5:
         cross_dirs.append("NONE")
         cross_confs.append(0.50)
         continue
-    cur_t = soxl_dt_list[i]
-    past_5_t = soxl_dt_list[i-5]
-    s_r = float(soxl_close_list[i] / soxl_close_list[i-5] - 1.0)
+    cur_t = tqqq_dt_list[i]
+    past_5_t = tqqq_dt_list[i-5]
+    s_r = float(tqqq_close_list[i] / tqqq_close_list[i-5] - 1.0)
     if (cur_t in nvda_map and past_5_t in nvda_map and 
         cur_t in qqq_map and past_5_t in qqq_map and 
         cur_t in vix_map and past_5_t in vix_map):
@@ -60,9 +60,9 @@ for i in range(len(soxl_15m)):
         q_r = float(qqq_map[cur_t] / qqq_map[past_5_t] - 1.0)
         v_r = float(vix_map[cur_t] / vix_map[past_5_t] - 1.0)
         sig_code, exp_conf, _ = cross_mod.predict_signal(
-            soxl_ret=s_r, nvda_ret=n_r, qqq_ret=q_r, soxx_ret=s_r, vix_ret=v_r, tnx_ret=0.0
+            tqqq_ret=s_r, nvda_ret=n_r, qqq_ret=q_r, soxx_ret=s_r, vix_ret=v_r, tnx_ret=0.0
         )
-        c_dir = "LONG_SOXL" if sig_code > 0 else ("SHORT_SOXS" if sig_code < 0 else "NONE")
+        c_dir = "LONG_TQQQ" if sig_code > 0 else ("SHORT_SQQQ" if sig_code < 0 else "NONE")
         c_conf = exp_conf
     else:
         c_dir = "NONE"
@@ -70,9 +70,9 @@ for i in range(len(soxl_15m)):
     cross_dirs.append(c_dir)
     cross_confs.append(c_conf)
 
-soxl_15m_feat['cross_dir'] = cross_dirs
-soxl_15m_feat['cross_conf'] = cross_confs
-soxl_15m_feat.set_index('datetime', inplace=True, drop=False)
+tqqq_15m_feat['cross_dir'] = cross_dirs
+tqqq_15m_feat['cross_conf'] = cross_confs
+tqqq_15m_feat.set_index('datetime', inplace=True, drop=False)
 
 T = 0.55
 TP_PCT = 0.035
@@ -83,17 +83,17 @@ FEE_RATE = 0.0020
 
 trades = []
 for d_str in unique_dates:
-    day_soxl_15 = soxl_15m_feat[soxl_15m_feat['date_str'] == d_str]
-    if len(day_soxl_15) < 5:
+    day_tqqq_15 = tqqq_15m_feat[tqqq_15m_feat['date_str'] == d_str]
+    if len(day_tqqq_15) < 5:
         continue
-    day_soxl_5 = soxl_5m[soxl_5m['date_str'] == d_str]
-    day_soxs_5 = soxs_5m[soxs_5m['date_str'] == d_str]
+    day_tqqq_5 = tqqq_5m[tqqq_5m['date_str'] == d_str]
+    day_sqqq_5 = sqqq_5m[sqqq_5m['date_str'] == d_str]
     daily_stoploss_count = 0
     b_idx = 0
-    n_bars = len(day_soxl_15)
+    n_bars = len(day_tqqq_15)
 
     while b_idx < n_bars:
-        cur_15m_row = day_soxl_15.iloc[b_idx]
+        cur_15m_row = day_tqqq_15.iloc[b_idx]
         cur_15m_time = cur_15m_row['datetime']
         time_str = cur_15m_row['time_str']
 
@@ -105,10 +105,10 @@ for d_str in unique_dates:
         conf_gbdt = float(cur_15m_row['Confidence'])
         dir_cross = cur_15m_row['cross_dir']
 
-        is_gbdt_trigger = (dir_gbdt in ["LONG_SOXL", "SHORT_SOXS"]) and (conf_gbdt >= T)
+        is_gbdt_trigger = (dir_gbdt in ["LONG_TQQQ", "SHORT_SQQQ"]) and (conf_gbdt >= T)
         is_cross_veto = (
-            (dir_gbdt == "LONG_SOXL" and dir_cross == "SHORT_SOXS") or
-            (dir_gbdt == "SHORT_SOXS" and dir_cross == "LONG_SOXL")
+            (dir_gbdt == "LONG_TQQQ" and dir_cross == "SHORT_SQQQ") or
+            (dir_gbdt == "SHORT_SQQQ" and dir_cross == "LONG_TQQQ")
         )
 
         if not is_gbdt_trigger or is_cross_veto:
@@ -117,23 +117,23 @@ for d_str in unique_dates:
 
         direction = dir_gbdt
         past_soxx_60 = soxx_60m[soxx_60m['datetime'] <= cur_15m_time]
-        past_soxl_60 = soxl_60m[soxl_60m['datetime'] <= cur_15m_time]
+        past_tqqq_60 = tqqq_60m[tqqq_60m['datetime'] <= cur_15m_time]
         is_60m_trend_ok = True
-        if len(past_soxx_60) >= 20 and len(past_soxl_60) >= 20:
+        if len(past_soxx_60) >= 20 and len(past_tqqq_60) >= 20:
             soxx_c = past_soxx_60['Close'].iloc[-1]
-            soxl_c = past_soxl_60['Close'].iloc[-1]
+            tqqq_c = past_tqqq_60['Close'].iloc[-1]
             soxx_ema20 = past_soxx_60['ema20'].iloc[-1]
-            soxl_ema20 = past_soxl_60['ema20'].iloc[-1]
-            if direction == "LONG_SOXL":
-                is_60m_trend_ok = (soxx_c >= soxx_ema20 * 0.998) and (soxl_c >= soxl_ema20 * 0.998)
-            elif direction == "SHORT_SOXS":
+            tqqq_ema20 = past_tqqq_60['ema20'].iloc[-1]
+            if direction == "LONG_TQQQ":
+                is_60m_trend_ok = (soxx_c >= soxx_ema20 * 0.998) and (tqqq_c >= tqqq_ema20 * 0.998)
+            elif direction == "SHORT_SQQQ":
                 is_60m_trend_ok = (soxx_c <= soxx_ema20 * 1.002)
 
         if not is_60m_trend_ok:
             b_idx += 1
             continue
 
-        if direction == "LONG_SOXL":
+        if direction == "LONG_TQQQ":
             vwap_diff = float(cur_15m_row.get("VWAP_Diff", 0.0))
             rsi_14 = float(cur_15m_row.get("RSI_14", 50.0))
             bb_lower = float(cur_15m_row.get("BB_Lower", 0.0))
@@ -142,8 +142,8 @@ for d_str in unique_dates:
             if bb_lower > 0:
                 dip_ok = dip_ok and (cur_close >= bb_lower * 1.001)
         else:
-            if cur_15m_time in soxs_15m_feat.index:
-                row_s = soxs_15m_feat.loc[cur_15m_time]
+            if cur_15m_time in sqqq_15m_feat.index:
+                row_s = sqqq_15m_feat.loc[cur_15m_time]
                 vwap_diff = float(row_s.get("VWAP_Diff", 0.0))
                 rsi_14 = float(row_s.get("RSI_14", 50.0))
                 bb_lower = float(row_s.get("BB_Lower", 0.0))
@@ -158,11 +158,11 @@ for d_str in unique_dates:
             b_idx += 1
             continue
 
-        chosen_symbol = "SOXL" if direction == "LONG_SOXL" else "SOXS"
-        base_px = float(cur_15m_row['Close']) if chosen_symbol == "SOXL" else float(soxs_15m_feat.loc[cur_15m_time]['Close'] if cur_15m_time in soxs_15m_feat.index else 40.0)
+        chosen_symbol = "TQQQ" if direction == "LONG_TQQQ" else "SQQQ"
+        base_px = float(cur_15m_row['Close']) if chosen_symbol == "TQQQ" else float(sqqq_15m_feat.loc[cur_15m_time]['Close'] if cur_15m_time in sqqq_15m_feat.index else 40.0)
         entry_px = round(base_px + SLIPPAGE_PAYUP, 2)
 
-        target_5m_df = day_soxl_5 if chosen_symbol == "SOXL" else day_soxs_5
+        target_5m_df = day_tqqq_5 if chosen_symbol == "TQQQ" else day_sqqq_5
         post_5m = target_5m_df[target_5m_df['datetime'] > cur_15m_time]
         if post_5m.empty:
             b_idx += 1

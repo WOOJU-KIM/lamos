@@ -10,9 +10,9 @@ if sys.platform.startswith('win'):
         pass
 
 conn = sqlite3.connect('data/market_data.db')
-df = pd.read_sql_query("SELECT datetime, open, high, low, close, volume FROM market_candles WHERE ticker='SOXS' AND timeframe='5m' ORDER BY datetime DESC LIMIT 100", conn)
+df = pd.read_sql_query("SELECT datetime, open, high, low, close, volume FROM market_candles WHERE ticker='SQQQ' AND timeframe='5m' ORDER BY datetime DESC LIMIT 100", conn)
 conn.close()
 
 df = df.iloc[::-1].reset_index(drop=True)
-print("=== SOXS 5m Price Trajectory on 2026-08-21 ===")
+print("=== SQQQ 5m Price Trajectory on 2026-08-21 ===")
 print(df.to_string())

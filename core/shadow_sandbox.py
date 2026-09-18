@@ -1,3 +1,4 @@
+from config import GBDT_CONFIDENCE_THRESHOLD
 import os
 import sys
 import json
@@ -65,7 +66,7 @@ class ShadowSandboxEngine:
                     gating_weight REAL DEFAULT 0.0,
                     expert_confidence REAL DEFAULT 0.0,
                     regime_snapshot TEXT DEFAULT '{}',
-                    direction TEXT DEFAULT 'LONG_SOXL',
+                    direction TEXT DEFAULT 'LONG_TQQQ',
                     executed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
@@ -78,7 +79,7 @@ class ShadowSandboxEngine:
                 ("gating_weight", "REAL DEFAULT 0.0"),
                 ("expert_confidence", "REAL DEFAULT 0.0"),
                 ("regime_snapshot", "TEXT DEFAULT '{}'"),
-                ("direction", "TEXT DEFAULT 'LONG_SOXL'")
+                ("direction", "TEXT DEFAULT 'LONG_TQQQ'")
             ]:
                 if col_name not in t_cols:
                     c.execute(f"ALTER TABLE shadow_trades ADD COLUMN {col_name} {col_type};")
@@ -176,13 +177,13 @@ class ShadowSandboxEngine:
         gating_weight: float = 0.0,
         expert_confidence: float = 0.0,
         regime_snapshot: Optional[Dict[str, Any]] = None,
-        direction: str = "LONG_SOXL"
+        direction: str = "LONG_TQQQ"
     ) -> Dict[str, Any]:
         """
         섀도우 가상 거래 집행 및 MoE 의사결정 메타데이터 영구 적재
         """
         trade_id = f"SHD_{model_id}_{datetime.now().strftime('%Y%m%d%H%M%S%f')[:17]}"
-        raw_ret = (exit_price - entry_price) / entry_price if direction == "LONG_SOXL" else (entry_price - exit_price) / entry_price
+        raw_ret = (exit_price - entry_price) / entry_price if direction == "LONG_TQQQ" else (entry_price - exit_price) / entry_price
         net_ret = raw_ret - fee_rate
 
         with self._get_connection() as conn:
@@ -289,8 +290,8 @@ class ShadowSandboxEngine:
         ticker: str,
         candidate_price: float,
         confidence_pct: float,
-        threshold_pct: float = 60.0,
-        rejection_reason: str = "LOW_CONFIDENCE (< 60.0%)",
+        threshold_pct: float = GBDT_CONFIDENCE_THRESHOLD * 100,
+        rejection_reason: str = f"LOW_CONFIDENCE (< {GBDT_CONFIDENCE_THRESHOLD * 100}%)",
         hypothetical_exit_price: float = 0.0,
         hypothetical_pnl_pct: float = 0.0,
         hypothetical_exit_reason: str = "PENDING",
@@ -389,16 +390,16 @@ class ShadowSandboxEngine:
 
             sample_rejected = [
                 # (timestamp, model_id, model_name, expert_name, ticker, cand_px, conf, thresh, reason, exit_px, pnl_pct, exit_rsn, verdict)
-                ("2026-08-17 14:45:00", "M-MOE-ORCHESTRATOR", "Track 6: MoE AI 메타", "오더플로우 CVD", "SOXL", 144.50, 54.2, 60.0, "장 마감 90분 전 신규진입 차단 (14:45 NYT)", 141.60, -2.30, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: 만약 샀다면 -2.0% 칼손절(-₩230,000) 발생 차단"),
-                ("2026-08-17 11:30:00", "M-SUB-ORDERFLOW", "Track 2: 오더플로우", "CVD 미시구조", "SOXL", 143.80, 52.8, 60.0, "확신도 52.8% (< 60.0% 기준 미달)", 140.90, -2.31, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: 횡보장 휩소 하락(-₩231,000) 완벽 방어"),
-                ("2026-08-14 13:15:00", "M-SUB-CROSS-ASSET", "Track 5: 크로스에셋 괴리", "NVDA/QQQ 괴리", "SOXL", 142.10, 48.5, 60.0, "선행 지수 랙 괴리 불충분 (확신도 48.5%)", 139.20, -2.34, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: NVDA 반락에 따른 손절(-₩234,000) 회피"),
-                ("2026-08-13 10:00:00", "M-MOE-ORCHESTRATOR", "Track 6: MoE AI 메타", "TDA 위상수학", "SOXL", 138.20, 56.4, 60.0, "엔트로피 기준 미달 (확신도 56.4%)", 143.10, 3.24, "TAKE_PROFIT (+3.5%)", "⚠️ 기회비용 발생: 만약 샀다면 +3.5%(+₩324,000) 익절 도달"),
-                ("2026-08-12 14:50:00", "M-DATA-REFRESH", "Track 1: 메인 최신화 롤링", "LightGBM 롤링", "SOXL", 136.40, 51.0, 60.0, "장 마감 90분 전 진입 차단 (14:50 NYT)", 133.60, -2.35, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: 장마감 급락 손절(-₩235,000) 방어"),
-                ("2026-08-11 11:45:00", "M-SUB-STATESPACE", "Track 4: 상태공간 칼만", "칼만필터 동역학", "SOXL", 135.00, 53.7, 60.0, "잠재 모멘텀 노이즈 과다 (확신도 53.7%)", 132.30, -2.30, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: 잔파동 손절(-₩230,000) 회피"),
-                ("2026-08-08 14:35:00", "M-MOE-ORCHESTRATOR", "Track 6: MoE AI 메타", "크로스에셋", "SOXL", 130.80, 58.1, 60.0, "장 마감 90분 전 진입 차단", 128.10, -2.36, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: EOD 강제청산 손실 방어"),
-                ("2026-08-07 10:15:00", "M-SUB-TDA", "Track 3: TDA 위상수학", "형태붕괴 TDA", "SOXL", 129.50, 49.2, 60.0, "위상 붕괴 시그널 미약 (확신도 49.2%)", 126.90, -2.31, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: 추가 하락 손절(-₩231,000) 방어"),
-                ("2026-08-06 13:30:00", "M-20260815-GOLDEN-V1", "Track 0: 실전 메인 챔피언", "GBM 시계열", "SOXL", 127.00, 55.0, 60.0, "트리플 스크린 필터 불일치", 131.50, 3.24, "TAKE_PROFIT (+3.5%)", "⚠️ 기회비용 발생: 만약 샀다면 +3.5%(+₩324,000) 도달"),
-                ("2026-08-05 12:00:00", "M-SUB-ORDERFLOW", "Track 2: 오더플로우", "CVD 미시구조", "SOXL", 125.40, 51.5, 60.0, "체결 델타 흡수율 미달 (확신도 51.5%)", 122.80, -2.37, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: 가짜 돌파 손절(-₩237,000) 방어")
+                ("2026-08-17 14:45:00", "M-MOE-ORCHESTRATOR", "Track 6: MoE AI 메타", "오더플로우 CVD", "TQQQ", 144.50, 54.2, 60.0, "장 마감 90분 전 신규진입 차단 (14:45 NYT)", 141.60, -2.30, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: 만약 샀다면 -2.0% 칼손절(-₩230,000) 발생 차단"),
+                ("2026-08-17 11:30:00", "M-SUB-ORDERFLOW", "Track 2: 오더플로우", "CVD 미시구조", "TQQQ", 143.80, 52.8, 60.0, "확신도 52.8% (< 60.0% 기준 미달)", 140.90, -2.31, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: 횡보장 휩소 하락(-₩231,000) 완벽 방어"),
+                ("2026-08-14 13:15:00", "M-SUB-CROSS-ASSET", "Track 5: 크로스에셋 괴리", "NVDA/QQQ 괴리", "TQQQ", 142.10, 48.5, 60.0, "선행 지수 랙 괴리 불충분 (확신도 48.5%)", 139.20, -2.34, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: NVDA 반락에 따른 손절(-₩234,000) 회피"),
+                ("2026-08-13 10:00:00", "M-MOE-ORCHESTRATOR", "Track 6: MoE AI 메타", "TDA 위상수학", "TQQQ", 138.20, 56.4, 60.0, "엔트로피 기준 미달 (확신도 56.4%)", 143.10, 3.24, "TAKE_PROFIT (+3.5%)", "⚠️ 기회비용 발생: 만약 샀다면 +3.5%(+₩324,000) 익절 도달"),
+                ("2026-08-12 14:50:00", "M-DATA-REFRESH", "Track 1: 메인 최신화 롤링", "LightGBM 롤링", "TQQQ", 136.40, 51.0, 60.0, "장 마감 90분 전 진입 차단 (14:50 NYT)", 133.60, -2.35, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: 장마감 급락 손절(-₩235,000) 방어"),
+                ("2026-08-11 11:45:00", "M-SUB-STATESPACE", "Track 4: 상태공간 칼만", "칼만필터 동역학", "TQQQ", 135.00, 53.7, 60.0, "잠재 모멘텀 노이즈 과다 (확신도 53.7%)", 132.30, -2.30, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: 잔파동 손절(-₩230,000) 회피"),
+                ("2026-08-08 14:35:00", "M-MOE-ORCHESTRATOR", "Track 6: MoE AI 메타", "크로스에셋", "TQQQ", 130.80, 58.1, 60.0, "장 마감 90분 전 진입 차단", 128.10, -2.36, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: EOD 강제청산 손실 방어"),
+                ("2026-08-07 10:15:00", "M-SUB-TDA", "Track 3: TDA 위상수학", "형태붕괴 TDA", "TQQQ", 129.50, 49.2, 60.0, "위상 붕괴 시그널 미약 (확신도 49.2%)", 126.90, -2.31, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: 추가 하락 손절(-₩231,000) 방어"),
+                ("2026-08-06 13:30:00", "M-20260815-GOLDEN-V1", "Track 0: 실전 메인 챔피언", "GBM 시계열", "TQQQ", 127.00, 55.0, 60.0, "트리플 스크린 필터 불일치", 131.50, 3.24, "TAKE_PROFIT (+3.5%)", "⚠️ 기회비용 발생: 만약 샀다면 +3.5%(+₩324,000) 도달"),
+                ("2026-08-05 12:00:00", "M-SUB-ORDERFLOW", "Track 2: 오더플로우", "CVD 미시구조", "TQQQ", 125.40, 51.5, 60.0, "체결 델타 흡수율 미달 (확신도 51.5%)", 122.80, -2.37, "STOP_LOSS (-2.0%)", "✅ 필터 방어 성공: 가짜 돌파 손절(-₩237,000) 방어")
             ]
 
             for ts, mid, mname, exp, tk, c_px, conf, thr, rsn, ex_px, pnl, ex_rsn, verd in sample_rejected:

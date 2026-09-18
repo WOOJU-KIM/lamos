@@ -32,7 +32,7 @@ def test_candles_and_moe_pipeline():
 
     # 1. 분봉 DB 적재 상태 전수 점검
     print("\n[Step 1] 심볼별 5분봉 / 15분봉 / 60분봉 DB 무결성 점검")
-    symbols = ["SOXL", "SOXS", "NVDA", "QQQ", "SOXX", "^VIX", "^TNX"]
+    symbols = ["TQQQ", "SQQQ", "NVDA", "QQQ", "SOXX", "^VIX", "^TNX"]
     for sym in symbols:
         df_5m = data_lake.load_candles(sym, "5m")
         df_15m = data_lake.load_candles(sym, "15m")
@@ -42,8 +42,8 @@ def test_candles_and_moe_pipeline():
     # 2. 실시간 틱 데이터와 15분봉 동적 병합 검증
     print("\n[Step 2] WebSocket 실시간 틱 ➔ 15분봉 동적 캔들 형성(Live Forming Candle) 검증")
     mock_live_px = 125.50
-    df_raw = data_lake.load_candles("SOXL", "15m")
-    df_merged = data_lake.get_candles_with_live_tick("SOXL", "15m", live_price=mock_live_px)
+    df_raw = data_lake.load_candles("TQQQ", "15m")
+    df_merged = data_lake.get_candles_with_live_tick("TQQQ", "15m", live_price=mock_live_px)
     
     print(f"   • 원본 15분봉 마지막 캔들: {df_raw.index[-1]} | 종가=${df_raw.iloc[-1]['Close']:.2f}")
     print(f"   • 틱 병합 15분봉 마지막 캔들: {df_merged.index[-1]} | 종가=${df_merged.iloc[-1]['Close']:.2f}")

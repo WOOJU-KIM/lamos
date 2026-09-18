@@ -28,8 +28,8 @@ class TestLiveDefenseAndBriefing(unittest.TestCase):
         moe_res = {
             "selected_expert": "gbdt_pattern",
             "gating_confidence": 0.72,
-            "direction": "LONG_SOXL",
-            "dir_gbdt": "LONG_SOXL",
+            "direction": "LONG_TQQQ",
+            "dir_gbdt": "LONG_TQQQ",
             "is_approved": False,
             "is_60m_trend_ok": False,
             "dip_ok": True
@@ -41,7 +41,7 @@ class TestLiveDefenseAndBriefing(unittest.TestCase):
         if top_conf >= 60.0 and not is_approved and moe_res.get("selected_expert") != "conflict_rejected":
             last_d_t = getattr(self.runner, "_last_defense_time", 0.0)
             if not getattr(self.runner, "_last_defense_state", False) and (now_ts - last_d_t >= 900.0):
-                cand_ticker = "SOXL" if "LONG" in moe_res.get("dir_gbdt", moe_res["direction"]) else "SOXS"
+                cand_ticker = "TQQQ" if "LONG" in moe_res.get("dir_gbdt", moe_res["direction"]) else "SQQQ"
                 is_60m = moe_res.get("is_60m_trend_ok", True)
                 is_dip = moe_res.get("dip_ok", True)
                 if not is_60m:
@@ -64,7 +64,7 @@ class TestLiveDefenseAndBriefing(unittest.TestCase):
                 self.runner._last_defense_time = now_ts
 
         self.runner.notifier.send_defense_alert.assert_called_once_with(
-            ticker="SOXL",
+            ticker="TQQQ",
             gbdt_prob=72.0,
             defense_type="Screen 1 (상위 60분봉 대추세 필터)",
             defense_reason="60분봉 20 EMA 역추세 구간으로 하방 리스크 차단"
@@ -78,8 +78,8 @@ class TestLiveDefenseAndBriefing(unittest.TestCase):
         with patch.object(notifier, "_dispatch_message", return_value={"ok": True}) as mock_dispatch:
             res = notifier.send_periodic_briefing(
                 now_str="2026-09-15 22:45:00 KST",
-                soxl_px=105.5,
-                soxs_px=15.2,
+                tqqq_px=105.5,
+                sqqq_px=15.2,
                 gbdt_conf=58.0,
                 direction="관망 (NONE)",
                 session_desc="정규장 Phase 1",

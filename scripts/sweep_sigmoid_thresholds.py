@@ -84,7 +84,7 @@ class SigmoidGatingNetwork:
             [-0.30, 0.35, 1.30, 0.30, 0.30],
             # Track 4: High VIX regime & hidden acceleration
             [0.10, 1.35, 0.40, 0.20, 0.30],
-            # Track 5: High Dislocation lag (NVDA/QQQ vs SOXL)
+            # Track 5: High Dislocation lag (NVDA/QQQ vs TQQQ)
             [0.20, 0.10, 0.30, 0.30, 1.50]
         ], dtype=np.float64)
 
@@ -92,7 +92,7 @@ class SigmoidGatingNetwork:
         self,
         bar_idx_in_day: int,
         vix_px: float,
-        soxl_sub_15m: pd.DataFrame,
+        tqqq_sub_15m: pd.DataFrame,
         nvda_sub_15m: pd.DataFrame,
         qqq_sub_15m: pd.DataFrame
     ) -> Tuple[np.ndarray, Dict[str, float]]:
@@ -105,9 +105,9 @@ class SigmoidGatingNetwork:
         
         # ATR ratio
         atr_ratio = 1.0
-        if len(soxl_sub_15m) >= 20:
-            h = soxl_sub_15m['High']
-            l = soxl_sub_15m['Low']
+        if len(tqqq_sub_15m) >= 20:
+            h = tqqq_sub_15m['High']
+            l = tqqq_sub_15m['Low']
             hl = h - l
             rec_atr = hl.tail(5).mean()
             avg_atr = hl.tail(20).mean()
@@ -117,12 +117,12 @@ class SigmoidGatingNetwork:
         
         # CVD Delta intensity
         cvd_delta = 0.0
-        if len(soxl_sub_15m) >= 5:
-            c = soxl_sub_15m['Close']
-            o = soxl_sub_15m['Open']
-            h = soxl_sub_15m['High']
-            l = soxl_sub_15m['Low']
-            v = soxl_sub_15m['Volume']
+        if len(tqqq_sub_15m) >= 5:
+            c = tqqq_sub_15m['Close']
+            o = tqqq_sub_15m['Open']
+            h = tqqq_sub_15m['High']
+            l = tqqq_sub_15m['Low']
+            v = tqqq_sub_15m['Volume']
             hl_diff = (h - l).replace(0, 0.001)
             v_delta = ((c - o) / hl_diff) * v
             avg_v = v.tail(15).mean() + 1e-6
@@ -131,8 +131,8 @@ class SigmoidGatingNetwork:
         
         # Dislocation lag
         dislocation_lag = 0.0
-        if len(soxl_sub_15m) >= 5 and len(nvda_sub_15m) >= 5 and len(qqq_sub_15m) >= 5:
-            s_ret = (soxl_sub_15m['Close'].iloc[-1] / soxl_sub_15m['Close'].iloc[-5] - 1.0) * 100.0
+        if len(tqqq_sub_15m) >= 5 and len(nvda_sub_15m) >= 5 and len(qqq_sub_15m) >= 5:
+            s_ret = (tqqq_sub_15m['Close'].iloc[-1] / tqqq_sub_15m['Close'].iloc[-5] - 1.0) * 100.0
             n_ret = (nvda_sub_15m['Close'].iloc[-1] / nvda_sub_15m['Close'].iloc[-5] - 1.0) * 100.0
             q_ret = (qqq_sub_15m['Close'].iloc[-1] / qqq_sub_15m['Close'].iloc[-5] - 1.0) * 100.0
             macro_exp = (n_ret * 0.6 + q_ret * 0.4) * 3.0
@@ -169,8 +169,8 @@ def run_full_threshold_backtest_sweep():
     
     # 1. Load data from SQLite DB
     conn = sqlite3.connect('data/market_data.db')
-    soxl_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='SOXL' AND timeframe='15m' ORDER BY datetime", conn)
-    soxs_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='SOXS' AND timeframe='15m' ORDER BY datetime", conn)
+    tqqq_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='TQQQ' AND timeframe='15m' ORDER BY datetime", conn)
+    sqqq_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='SQQQ' AND timeframe='15m' ORDER BY datetime", conn)
     nvda_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='NVDA' AND timeframe='15m' ORDER BY datetime", conn)
     qqq_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='QQQ' AND timeframe='15m' ORDER BY datetime", conn)
     vix_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='^VIX' AND timeframe='15m' ORDER BY datetime", conn)
@@ -178,15 +178,15 @@ def run_full_threshold_backtest_sweep():
     soxx_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='SOXX' AND timeframe='15m' ORDER BY datetime", conn)
     conn.close()
 
-    for df in [soxl_df, soxs_df, nvda_df, qqq_df, vix_df, tnx_df, soxx_df]:
+    for df in [tqqq_df, sqqq_df, nvda_df, qqq_df, vix_df, tnx_df, soxx_df]:
         df['Datetime'] = pd.to_datetime(df['datetime'])
         df['date'] = df['datetime'].str.slice(0, 10)
         df.set_index('Datetime', inplace=True)
 
-    unique_dates = sorted(soxl_df['date'].unique())
+    unique_dates = sorted(tqqq_df['date'].unique())
     total_days = len(unique_dates)
     total_weeks = total_days / 5.0
-    print(f"📊 [데이터 레이크] 총 {total_days}개 거래일 (약 {total_weeks:.1f}주), 15분봉 {len(soxl_df)}개 로드 완료")
+    print(f"📊 [데이터 레이크] 총 {total_days}개 거래일 (약 {total_weeks:.1f}주), 15분봉 {len(tqqq_df)}개 로드 완료")
 
     # Initialize models
     gating_net = SigmoidGatingNetwork()
@@ -197,8 +197,8 @@ def run_full_threshold_backtest_sweep():
 
     # Pre-calculate ML features for GBDT models
     ml_engine = MLFeatureEngine()
-    soxl_feat = ml_engine.extract_features(soxl_df)
-    soxs_feat = ml_engine.extract_features(soxs_df)
+    tqqq_feat = ml_engine.extract_features(tqqq_df)
+    sqqq_feat = ml_engine.extract_features(sqqq_df)
     
     # 2. Iterate through each threshold scenario
     scenario_results = []
@@ -219,17 +219,17 @@ def run_full_threshold_backtest_sweep():
         entry_confidence = 0.0
 
         for day_str in unique_dates:
-            day_soxl = soxl_df[soxl_df['date'] == day_str].reset_index(drop=True)
-            day_soxs = soxs_df[soxs_df['date'] == day_str].reset_index(drop=True)
+            day_tqqq = tqqq_df[tqqq_df['date'] == day_str].reset_index(drop=True)
+            day_sqqq = sqqq_df[sqqq_df['date'] == day_str].reset_index(drop=True)
             
-            if len(day_soxl) < 5 or len(day_soxs) < 5:
+            if len(day_tqqq) < 5 or len(day_sqqq) < 5:
                 continue
 
-            num_bars = min(len(day_soxl), len(day_soxs))
+            num_bars = min(len(day_tqqq), len(day_sqqq))
 
             for b_idx in range(num_bars):
-                row_l = day_soxl.iloc[b_idx]
-                row_s = day_soxs.iloc[b_idx]
+                row_l = day_tqqq.iloc[b_idx]
+                row_s = day_sqqq.iloc[b_idx]
                 bar_dt = row_l['datetime']
                 time_str = bar_dt.split(" ")[1][:5]
                 
@@ -238,14 +238,14 @@ def run_full_threshold_backtest_sweep():
                 cur_vix = float(sub_vix.iloc[-1]['Close']) if not sub_vix.empty else 16.5
                 
                 # Historical sub-windows for feature calculation
-                soxl_sub = soxl_df[soxl_df['datetime'] <= bar_dt].tail(50)
+                tqqq_sub = tqqq_df[tqqq_df['datetime'] <= bar_dt].tail(50)
                 nvda_sub = nvda_df[nvda_df['datetime'] <= bar_dt].tail(50)
                 qqq_sub = qqq_df[qqq_df['datetime'] <= bar_dt].tail(50)
                 
                 # 1. Evaluate Exit Conditions if in position
                 if in_market and current_pos != "NONE":
                     bars_held += 1
-                    curr_row = row_l if current_pos == "SOXL" else row_s
+                    curr_row = row_l if current_pos == "TQQQ" else row_s
                     curr_high = float(curr_row['High'])
                     curr_low = float(curr_row['Low'])
                     curr_close = float(curr_row['Close'])
@@ -310,7 +310,7 @@ def run_full_threshold_backtest_sweep():
                         continue
 
                     # Compute 5-sensor vector R
-                    R, reg_dict = gating_net.compute_sensor_vector(b_idx, cur_vix, soxl_sub, nvda_sub, qqq_sub)
+                    R, reg_dict = gating_net.compute_sensor_vector(b_idx, cur_vix, tqqq_sub, nvda_sub, qqq_sub)
                     
                     # Sigmoid Gating scores
                     scores = gating_net.predict_sigmoid_scores(R)
@@ -329,33 +329,33 @@ def run_full_threshold_backtest_sweep():
 
                     try:
                         if top_track == "track2_orderflow":
-                            cvd_df = exp_orderflow.compute_cvd(soxl_sub)
+                            cvd_df = exp_orderflow.compute_cvd(tqqq_sub)
                             sig_code, c_val, _ = exp_orderflow.predict_signal(cvd_df.iloc[-1])
-                            chosen_direction = "LONG_SOXL" if sig_code >= 0 else "SHORT_SOXS"
+                            chosen_direction = "LONG_TQQQ" if sig_code >= 0 else "SHORT_SQQQ"
                         elif top_track == "track3_tda":
-                            sig_code, c_val, _ = exp_tda.predict_signal(soxl_sub)
-                            chosen_direction = "LONG_SOXL" if sig_code >= 0 else "SHORT_SOXS"
+                            sig_code, c_val, _ = exp_tda.predict_signal(tqqq_sub)
+                            chosen_direction = "LONG_TQQQ" if sig_code >= 0 else "SHORT_SQQQ"
                         elif top_track == "track4_statespace":
-                            sig_code, c_val, _ = exp_statespace.predict_signal(soxl_sub['Close'].values)
-                            chosen_direction = "LONG_SOXL" if sig_code >= 0 else "SHORT_SOXS"
+                            sig_code, c_val, _ = exp_statespace.predict_signal(tqqq_sub['Close'].values)
+                            chosen_direction = "LONG_TQQQ" if sig_code >= 0 else "SHORT_SQQQ"
                         elif top_track == "track5_cross_asset":
-                            s_ret = (soxl_sub['Close'].iloc[-1] / soxl_sub['Close'].iloc[-5] - 1.0)
+                            s_ret = (tqqq_sub['Close'].iloc[-1] / tqqq_sub['Close'].iloc[-5] - 1.0)
                             n_ret = (nvda_sub['Close'].iloc[-1] / nvda_sub['Close'].iloc[-5] - 1.0)
                             q_ret = (qqq_sub['Close'].iloc[-1] / qqq_sub['Close'].iloc[-5] - 1.0)
                             sig_code, c_val, _ = exp_cross.predict_signal(s_ret, n_ret, q_ret, 0.0, -0.01, -0.005)
-                            chosen_direction = "LONG_SOXL" if sig_code >= 0 else "SHORT_SOXS"
+                            chosen_direction = "LONG_TQQQ" if sig_code >= 0 else "SHORT_SQQQ"
                         else:  # track0_gbdt or track1_refresh
-                            c = soxl_sub['Close']
+                            c = tqqq_sub['Close']
                             ret_5 = float(c.iloc[-1] / c.iloc[-5] - 1.0) if len(c) >= 5 else 0.0
-                            chosen_direction = "SHORT_SOXS" if ret_5 < -0.004 else "LONG_SOXL"
+                            chosen_direction = "SHORT_SQQQ" if ret_5 < -0.004 else "LONG_TQQQ"
                     except Exception:
-                        chosen_direction = "LONG_SOXL"
+                        chosen_direction = "LONG_TQQQ"
 
                     if chosen_direction != "NONE":
                         # Enter Position!
                         in_market = True
-                        current_pos = "SOXL" if chosen_direction == "LONG_SOXL" else "SOXS"
-                        entry_row = row_l if current_pos == "SOXL" else row_s
+                        current_pos = "TQQQ" if chosen_direction == "LONG_TQQQ" else "SQQQ"
+                        entry_row = row_l if current_pos == "TQQQ" else row_s
                         entry_price = float(entry_row['Close'])
                         entry_bar_time = bar_dt
                         entry_bar_idx_in_day = b_idx

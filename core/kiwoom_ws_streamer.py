@@ -41,7 +41,7 @@ class KiwoomWebSocketStreamer:
         else:
             self.ws_url = "wss://api.kiwoom.com:10000/api/us/websocket"
 
-        self.subscribed_symbols: List[str] = ["SOXL", "SOXS", "SOXX", "NVDA", "QQQ", "VIXY", "IEF"]
+        self.subscribed_symbols: List[str] = ["SOXL", "SOXS", "TQQQ", "SQQQ", "SOXX", "NVDA", "QQQ", "VIXY", "IEF"]
         self.latest_prices: Dict[str, float] = {}
         self.latest_ticks: Dict[str, Dict[str, Any]] = {}
         self.ws_tick_received: Dict[str, bool] = {}     # 실제 WebSocket 틱 수신 여부 {symbol: bool}

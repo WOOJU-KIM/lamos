@@ -40,12 +40,12 @@ def run_weekend_data_refresh():
 
     # 1. 최근 504 거래일(Trading Days) 하드코딩 롤링 윈도우 쿼리 로드
     print("\n⏳ [1/5] market_data.db에서 최근 504 거래일(2년) 롤링 윈도우 데이터 추출...")
-    df_15m = data_lake.load_rolling_candles("SOXL", "15m", max_trading_days=504)
+    df_15m = data_lake.load_rolling_candles("TQQQ", "15m", max_trading_days=504)
 
     if df_15m.empty or len(df_15m) < 100:
         print("⚠️ 로컬 DB 데이터 부족으로 Yahoo Finance에서 60일치 수집 후 재시도...")
-        data_lake.harvest_symbol("SOXL", "15m", period="60d")
-        df_15m = data_lake.load_rolling_candles("SOXL", "15m", max_trading_days=504)
+        data_lake.harvest_symbol("TQQQ", "15m", period="60d")
+        df_15m = data_lake.load_rolling_candles("TQQQ", "15m", max_trading_days=504)
 
     trading_days = sorted(df_15m.index.strftime('%Y-%m-%d').unique())
     num_days = len(trading_days)
@@ -72,8 +72,8 @@ def run_weekend_data_refresh():
     counts = feat_df['Target'].value_counts()
     valid_n = len(feat_df.dropna())
     print("   📊 [정답지 클래스 분포]:")
-    print(f"      • Class  1 (SOXL 롱 TP +3.0% 선도달): {counts.get(1, 0):4d}개 ({counts.get(1, 0)/valid_n*100:5.2f}%)")
-    print(f"      • Class -1 (SOXS 숏 TP -3.0% 선도달): {counts.get(-1, 0):4d}개 ({counts.get(-1, 0)/valid_n*100:5.2f}%)")
+    print(f"      • Class  1 (TQQQ 롱 TP +3.0% 선도달): {counts.get(1, 0):4d}개 ({counts.get(1, 0)/valid_n*100:5.2f}%)")
+    print(f"      • Class -1 (SQQQ 숏 TP -3.0% 선도달): {counts.get(-1, 0):4d}개 ({counts.get(-1, 0)/valid_n*100:5.2f}%)")
     print(f"      • Class  0 (관망 / 횡보 / 타임스탑):    {counts.get(0, 0):4d}개 ({counts.get(0, 0)/valid_n*100:5.2f}%)")
 
     # 3. LightGBM 3-Class 다중 분류기 훈련 (Concept Drift 방지 최신 Regime 가중)

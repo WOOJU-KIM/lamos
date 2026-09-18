@@ -107,9 +107,9 @@ def get_main_trade_records(limit: int = 50) -> List[Dict[str, Any]]:
                         "date": row.get("entry_time", "")[:10],
                         "entry_time": row.get("entry_time", ""),
                         "exit_time": row.get("exit_time", ""),
-                        "ticker": row.get("symbol", "SOXL"),
-                        "symbol": row.get("symbol", "SOXL"),
-                        "direction": f"LONG_{row.get('symbol', 'SOXL')}",
+                        "ticker": row.get("symbol", "TQQQ"),
+                        "symbol": row.get("symbol", "TQQQ"),
+                        "direction": f"LONG_{row.get('symbol', 'TQQQ')}",
                         "entry_price": float(row.get("actual_entry_price") or 0),
                         "exit_price": float(row.get("actual_exit_price") or 0),
                         "pnl_pct": pnl_p,
@@ -132,7 +132,7 @@ def get_main_trade_records(limit: int = 50) -> List[Dict[str, Any]]:
                     pnl_k = float(row.get("pnl_krw") or 0)
                     pnl_pct_raw = str(row.get("pnl_pct", "0")).replace("%", "").replace("+", "")
                     pnl_p = float(pnl_pct_raw) if pnl_pct_raw else 0.0
-                    ticker = row.get("ticker", "SOXL")
+                    ticker = row.get("ticker", "TQQQ")
                     records.append({
                         "trade_id": row.get("trade_id", ""),
                         "date": row.get("date", ""),
@@ -140,7 +140,7 @@ def get_main_trade_records(limit: int = 50) -> List[Dict[str, Any]]:
                         "exit_time": row.get("exit_time", ""),
                         "ticker": ticker,
                         "symbol": ticker,
-                        "direction": f"LONG_{ticker}" if ticker == "SOXL" else f"SHORT_{ticker}",
+                        "direction": f"LONG_{ticker}" if ticker == "TQQQ" else f"SHORT_{ticker}",
                         "entry_price": float(row.get("entry_price") or 0),
                         "exit_price": float(row.get("exit_price") or 0),
                         "pnl_pct": pnl_p,
@@ -155,32 +155,32 @@ def get_main_trade_records(limit: int = 50) -> List[Dict[str, Any]]:
     return records[:limit]
 
 def get_latest_live_battle_metrics():
-    """system_logs.jsonl 및 실시간 시세에서 최신 SOXL vs SOXS 실시간 승률 및 AI 게이팅 지표 파싱"""
+    """system_logs.jsonl 및 실시간 시세에서 최신 TQQQ vs SQQQ 실시간 승률 및 AI 게이팅 지표 파싱"""
     log_file = DATA_DIR / "system_logs.jsonl"
     metrics = {
-        "soxl_conf": 48.0,
-        "soxs_conf": 72.1,
-        "winner_symbol": "SOXS",
+        "tqqq_conf": 48.0,
+        "sqqq_conf": 72.1,
+        "winner_symbol": "SQQQ",
         "top1_model": "파형 GBDT 스나이퍼",
         "top1_weight": 24.5,
         "vix": 15.2,
         "atr_ratio": 1.07,
         "cvd_strength": -0.41,
         "lead_lag": 0.15,
-        "soxl_price": 121.82,
-        "soxs_price": 44.14,
+        "tqqq_price": 121.82,
+        "sqqq_price": 44.14,
         "nvda_price": 118.50,
         "qqq_price": 475.20,
         "updated_at": datetime.now().strftime("%H:%M:%S")
     }
     # 실시간 호가/시세 주입
     try:
-        q_soxl = kiwoom_broker.get_stock_quote("SOXL")
-        if q_soxl.get("last_price"):
-            metrics["soxl_price"] = float(q_soxl["last_price"])
-        q_soxs = kiwoom_broker.get_stock_quote("SOXS")
-        if q_soxs.get("last_price"):
-            metrics["soxs_price"] = float(q_soxs["last_price"])
+        q_tqqq = kiwoom_broker.get_stock_quote("TQQQ")
+        if q_tqqq.get("last_price"):
+            metrics["tqqq_price"] = float(q_tqqq["last_price"])
+        q_sqqq = kiwoom_broker.get_stock_quote("SQQQ")
+        if q_sqqq.get("last_price"):
+            metrics["sqqq_price"] = float(q_sqqq["last_price"])
     except Exception:
         pass
 
@@ -192,11 +192,11 @@ def get_latest_live_battle_metrics():
                 msg = l.get("message", "")
                 if "[롱/숏 실시간 승률 대결]" in msg:
                     import re
-                    m = re.search(r"롱\(SOXL\):\s*([\d\.]+)%\s*vs\s*숏\(SOXS\):\s*([\d\.]+)%", msg)
+                    m = re.search(r"롱\(TQQQ\):\s*([\d\.]+)%\s*vs\s*숏\(SQQQ\):\s*([\d\.]+)%", msg)
                     if m:
-                        metrics["soxl_conf"] = float(m.group(1))
-                        metrics["soxs_conf"] = float(m.group(2))
-                        metrics["winner_symbol"] = "SOXS" if metrics["soxs_conf"] > metrics["soxl_conf"] else "SOXL"
+                        metrics["tqqq_conf"] = float(m.group(1))
+                        metrics["sqqq_conf"] = float(m.group(2))
+                        metrics["winner_symbol"] = "SQQQ" if metrics["sqqq_conf"] > metrics["tqqq_conf"] else "TQQQ"
                         break
             for l in reversed(lines[-80:]):
                 msg = l.get("message", "")
@@ -239,7 +239,7 @@ def get_lifecycle_events():
             "category": "TRADE",
             "badge": "⚡ 체결 완료",
             "color": "#10b981" if pnl >= 0 else "#ef4444",
-            "title": f"[{tr.get('symbol', 'SOXL')}] {tr.get('side', 'BUY')} 체결",
+            "title": f"[{tr.get('symbol', 'TQQQ')}] {tr.get('side', 'BUY')} 체결",
             "detail": f"수량 {tr.get('qty', 1)}주 @ ${tr.get('price', 0):.2f} | 손익: {pnl_str} ({tr.get('pnl_rate_pct', 0):+.2f}%)"
         })
 
@@ -412,8 +412,8 @@ class CockpitHTTPHandler(BaseHTTPRequestHandler):
                 "profit_factor": 2.06,
                 "mdd_pct": 9.95,
                 "composite_score": 96.5,
-                "soxl_win_rate_pct": 52.0,
-                "soxs_win_rate_pct": 66.7
+                "tqqq_win_rate_pct": 52.0,
+                "sqqq_win_rate_pct": 66.7
             }
             if summary_file.exists():
                 try:
@@ -430,8 +430,8 @@ class CockpitHTTPHandler(BaseHTTPRequestHandler):
                         active_champion_info["losses"] = t_cnt - wins
                         active_champion_info["profit_factor"] = float(sm.get("profit_factor", 2.06))
                         active_champion_info["mdd_pct"] = float(sm.get("mdd_pct", 9.95))
-                        active_champion_info["soxl_win_rate_pct"] = float(sm.get("soxl_win_rate_pct", 52.0))
-                        active_champion_info["soxs_win_rate_pct"] = float(sm.get("soxs_win_rate_pct", 66.7))
+                        active_champion_info["tqqq_win_rate_pct"] = float(sm.get("tqqq_win_rate_pct", 52.0))
+                        active_champion_info["sqqq_win_rate_pct"] = float(sm.get("sqqq_win_rate_pct", 66.7))
                 except Exception:
                     pass
 

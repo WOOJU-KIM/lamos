@@ -9,7 +9,7 @@ if sys.platform.startswith('win'):
 
 def test_vwap_filter_1530():
     conn = sqlite3.connect('data/market_data.db')
-    df_5m = pd.read_sql_query("SELECT symbol, datetime, open, high, low, close, volume FROM market_candles WHERE timeframe='5m' AND symbol IN ('SOXL', 'SOXS')", conn)
+    df_5m = pd.read_sql_query("SELECT symbol, datetime, open, high, low, close, volume FROM market_candles WHERE timeframe='5m' AND symbol IN ('TQQQ', 'SQQQ')", conn)
     df_5m['datetime'] = pd.to_datetime(df_5m['datetime'])
     df_5m['date'] = df_5m['datetime'].dt.strftime('%Y-%m-%d')
     df_5m['time'] = df_5m['datetime'].dt.strftime('%H:%M')
@@ -23,11 +23,11 @@ def test_vwap_filter_1530():
     FEE = 0.0020
 
     for d in days:
-        sub_l = df_5m[(df_5m['date'] == d) & (df_5m['symbol'] == 'SOXL')].sort_values('time').copy()
-        sub_s = df_5m[(df_5m['date'] == d) & (df_5m['symbol'] == 'SOXS')].sort_values('time').copy()
+        sub_l = df_5m[(df_5m['date'] == d) & (df_5m['symbol'] == 'TQQQ')].sort_values('time').copy()
+        sub_s = df_5m[(df_5m['date'] == d) & (df_5m['symbol'] == 'SQQQ')].sort_values('time').copy()
         if len(sub_l) < 50 or len(sub_s) < 50: continue
 
-        # Compute intraday VWAP for SOXL
+        # Compute intraday VWAP for TQQQ
         sub_l['cum_vol'] = sub_l['volume'].cumsum()
         sub_l['cum_pv'] = (sub_l['close'] * sub_l['volume']).cumsum()
         sub_l['vwap'] = sub_l['cum_pv'] / (sub_l['cum_vol'] + 1e-6)
@@ -47,7 +47,7 @@ def test_vwap_filter_1530():
 
         # Signal Candidate
         if vol_ratio >= 2.0 and bar_ret >= 0.5:
-            # Bullish spike in SOXL
+            # Bullish spike in TQQQ
             e_px = post_l.iloc[0]['open'] + SLIP
             tp_px = e_px * (1 + TP)
             sl_px = e_px * (1 + SL)
@@ -61,12 +61,12 @@ def test_vwap_filter_1530():
                     exit_px = sl_px - SLIP; reason = "SL -1.0%"; break
             net_ret = (exit_px - e_px) / e_px * 100 - (FEE * 100)
             trades.append({
-                'date': d, 'sym': 'SOXL', 'vol_ratio': round(vol_ratio, 1), 'bar_ret': round(bar_ret, 2),
+                'date': d, 'sym': 'TQQQ', 'vol_ratio': round(vol_ratio, 1), 'bar_ret': round(bar_ret, 2),
                 'vwap_diff': round(vwap_diff, 2), 'vwap_aligned': vwap_diff > 0,
                 'net_ret': round(net_ret, 2), 'reason': reason
             })
         elif vol_ratio >= 2.0 and bar_ret <= -0.5:
-            # Bearish spike in SOXL -> Buy SOXS
+            # Bearish spike in TQQQ -> Buy SQQQ
             e_px = post_s.iloc[0]['open'] + SLIP
             tp_px = e_px * (1 + TP)
             sl_px = e_px * (1 + SL)
@@ -80,7 +80,7 @@ def test_vwap_filter_1530():
                     exit_px = sl_px - SLIP; reason = "SL -1.0%"; break
             net_ret = (exit_px - e_px) / e_px * 100 - (FEE * 100)
             trades.append({
-                'date': d, 'sym': 'SOXS', 'vol_ratio': round(vol_ratio, 1), 'bar_ret': round(bar_ret, 2),
+                'date': d, 'sym': 'SQQQ', 'vol_ratio': round(vol_ratio, 1), 'bar_ret': round(bar_ret, 2),
                 'vwap_diff': round(vwap_diff, 2), 'vwap_aligned': vwap_diff < 0,
                 'net_ret': round(net_ret, 2), 'reason': reason
             })
@@ -95,7 +95,7 @@ def test_vwap_filter_1530():
     wr_all = (tdf['net_ret'] > 0).mean() * 100
     print(f"[1. VWAP 미적용 전체]: 거래 {len(tdf)}회 | 승률 {wr_all:.1f}% (승 {(tdf['net_ret']>0).sum()}/패 {(tdf['net_ret']<=0).sum()}) | 평균수익 {tdf['net_ret'].mean():+.2f}% | 누적 {((1+tdf['net_ret']/100).prod()-1)*100:+.2f}%")
 
-    # VWAP aligned (Price > VWAP for SOXL, Price < VWAP for SOXS)
+    # VWAP aligned (Price > VWAP for TQQQ, Price < VWAP for SQQQ)
     aligned = tdf[tdf['vwap_aligned'] == True]
     wr_alg = (aligned['net_ret'] > 0).mean() * 100
     print(f"[2. VWAP 정렬(순방향) 필터 적용]: 거래 {len(aligned)}회 | 승률 {wr_alg:.1f}% (승 {(aligned['net_ret']>0).sum()}/패 {(aligned['net_ret']<=0).sum()}) | 평균수익 {aligned['net_ret'].mean():+.2f}% | 누적 {((1+aligned['net_ret']/100).prod()-1)*100:+.2f}%")

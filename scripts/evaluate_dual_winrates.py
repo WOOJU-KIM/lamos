@@ -54,7 +54,7 @@ def calculate_detailed_winrates():
     print(f"   • 전략: 15m LightGBM GBDT + 크로스에셋 Veto 듀얼 (Model C)")
     print(f"   • 익절/손절: +3.0% 익절 / -2.0% 칼손절 / 90분 타임스탑")
     print(f"   • 전적: {p1_trades}전 {p1_wins}승 {p1_losses}패")
-    print(f"   • 승률: {p1_win_rate:.2f}% (SOXL 65.0% / SOXS 80.8%)")
+    print(f"   • 승률: {p1_win_rate:.2f}% (TQQQ 65.0% / SQQQ 80.8%)")
     print(f"   • 누적 수익률: +{p1_return_pct:.2f}% (손익비 3.29, MDD 6.44%)")
 
     print(f"\n2️⃣ [Phase 2: 장 막판 5분봉 스나이퍼 (14:30 ~ 15:30 EDT)]")

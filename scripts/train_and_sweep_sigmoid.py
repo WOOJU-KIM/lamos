@@ -21,8 +21,8 @@ from core.ml_engine import MLFeatureEngine
 
 # Load historical database
 conn = sqlite3.connect('data/market_data.db')
-soxl_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='SOXL' AND timeframe='15m' ORDER BY datetime", conn)
-soxs_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='SOXS' AND timeframe='15m' ORDER BY datetime", conn)
+tqqq_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='TQQQ' AND timeframe='15m' ORDER BY datetime", conn)
+sqqq_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='SQQQ' AND timeframe='15m' ORDER BY datetime", conn)
 nvda_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='NVDA' AND timeframe='15m' ORDER BY datetime", conn)
 qqq_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='QQQ' AND timeframe='15m' ORDER BY datetime", conn)
 soxx_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='SOXX' AND timeframe='15m' ORDER BY datetime", conn)
@@ -30,16 +30,16 @@ vix_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as 
 tnx_df = pd.read_sql_query("SELECT datetime, open as Open, high as High, low as Low, close as Close, volume as Volume FROM market_candles WHERE symbol='^TNX' AND timeframe='15m' ORDER BY datetime", conn)
 conn.close()
 
-for df in [soxl_df, soxs_df, nvda_df, qqq_df, soxx_df, vix_df, tnx_df]:
+for df in [tqqq_df, sqqq_df, nvda_df, qqq_df, soxx_df, vix_df, tnx_df]:
     df['Datetime'] = pd.to_datetime(df['datetime'])
     df['date'] = df['datetime'].str.slice(0, 10)
     df.set_index('Datetime', inplace=True)
 
-unique_dates = sorted(soxl_df['date'].unique())
+unique_dates = sorted(tqqq_df['date'].unique())
 total_days = len(unique_dates)
 total_weeks = total_days / 5.0
 
-print(f"Loaded {len(soxl_df)} bars across {total_days} days ({total_weeks:.1f} weeks).")
+print(f"Loaded {len(tqqq_df)} bars across {total_days} days ({total_weeks:.1f} weeks).")
 
 # 1. Build Expert Candidate Signals and Labels
 exp_orderflow = OrderFlowImbalanceModel()
@@ -48,22 +48,22 @@ exp_statespace = StateSpaceKalmanModel()
 exp_cross = CrossAssetDislocationModel()
 ml_engine = MLFeatureEngine()
 
-soxl_feat = ml_engine.extract_features(soxl_df)
-soxs_feat = ml_engine.extract_features(soxs_df)
+tqqq_feat = ml_engine.extract_features(tqqq_df)
+sqqq_feat = ml_engine.extract_features(sqqq_df)
 
 # Let's extract training samples for each bar
 samples = []
-n_bars = len(soxl_df)
+n_bars = len(tqqq_df)
 
 for i in range(30, n_bars - 6):
-    bar_dt = soxl_df['datetime'].iloc[i]
+    bar_dt = tqqq_df['datetime'].iloc[i]
     time_str = bar_dt.split(" ")[1][:5]
     
     # Skip pre-market, first bar, and after cutoff (14:30 NYT)
     if time_str < "09:45" or time_str >= "14:30":
         continue
         
-    sub_soxl = soxl_df.iloc[:i+1].tail(30)
+    sub_tqqq = tqqq_df.iloc[:i+1].tail(30)
     sub_nvda = nvda_df.iloc[:i+1].tail(30)
     sub_qqq = qqq_df.iloc[:i+1].tail(30)
     sub_soxx = soxx_df.iloc[:i+1].tail(30)
@@ -83,18 +83,18 @@ for i in range(30, n_bars - 6):
     vix_norm = (cur_vix - 17.0) / 4.0
     
     # 3. atr_ratio
-    hl = sub_soxl['High'] - sub_soxl['Low']
+    hl = sub_tqqq['High'] - sub_tqqq['Low']
     rec_atr = hl.tail(5).mean()
     avg_atr = hl.tail(20).mean()
     atr_ratio = (rec_atr / avg_atr) if avg_atr > 0 else 1.0
     atr_norm = (atr_ratio - 1.0) / 0.4
     
     # 4. cvd_delta
-    c = sub_soxl['Close']
-    o = sub_soxl['Open']
-    h = sub_soxl['High']
-    l = sub_soxl['Low']
-    v = sub_soxl['Volume']
+    c = sub_tqqq['Close']
+    o = sub_tqqq['Open']
+    h = sub_tqqq['High']
+    l = sub_tqqq['Low']
+    v = sub_tqqq['Volume']
     hl_diff = (h - l).replace(0, 0.001)
     v_delta = ((c - o) / hl_diff) * v
     avg_v = v.tail(15).mean() + 1e-6
@@ -102,7 +102,7 @@ for i in range(30, n_bars - 6):
     cvd_norm = np.clip(cvd_delta, -3.0, 3.0)
     
     # 5. dislocation_lag
-    s_ret = (sub_soxl['Close'].iloc[-1] / sub_soxl['Close'].iloc[-5] - 1.0) * 100.0
+    s_ret = (sub_tqqq['Close'].iloc[-1] / sub_tqqq['Close'].iloc[-5] - 1.0) * 100.0
     n_ret = (sub_nvda['Close'].iloc[-1] / sub_nvda['Close'].iloc[-5] - 1.0) * 100.0
     q_ret = (sub_qqq['Close'].iloc[-1] / sub_qqq['Close'].iloc[-5] - 1.0) * 100.0
     macro_exp = (n_ret * 0.6 + q_ret * 0.4) * 3.0
@@ -112,15 +112,15 @@ for i in range(30, n_bars - 6):
     R_vec = [elapsed_norm, vix_norm, atr_norm, cvd_norm, disloc_norm]
     
     # Determine future 6-bar ground truth for LONG and SHORT
-    entry_px_l = float(soxl_df['Close'].iloc[i])
-    entry_px_s = float(soxs_df['Close'].iloc[i])
+    entry_px_l = float(tqqq_df['Close'].iloc[i])
+    entry_px_s = float(sqqq_df['Close'].iloc[i])
     
-    fut_soxl = soxl_df.iloc[i+1 : i+7]
-    fut_soxs = soxs_df.iloc[i+1 : i+7]
+    fut_tqqq = tqqq_df.iloc[i+1 : i+7]
+    fut_sqqq = sqqq_df.iloc[i+1 : i+7]
     
     # LONG Outcome
     win_long = False
-    for _, f_r in fut_soxl.iterrows():
+    for _, f_r in fut_tqqq.iterrows():
         if (f_r['High'] - entry_px_l) / entry_px_l >= 0.035:
             win_long = True
             break
@@ -128,12 +128,12 @@ for i in range(30, n_bars - 6):
             win_long = False
             break
     else:
-        last_ret = (fut_soxl['Close'].iloc[-1] - entry_px_l) / entry_px_l
+        last_ret = (fut_tqqq['Close'].iloc[-1] - entry_px_l) / entry_px_l
         win_long = (last_ret > 0.0030)
 
     # SHORT Outcome
     win_short = False
-    for _, f_r in fut_soxs.iterrows():
+    for _, f_r in fut_sqqq.iterrows():
         if (f_r['High'] - entry_px_s) / entry_px_s >= 0.035:
             win_short = True
             break
@@ -141,7 +141,7 @@ for i in range(30, n_bars - 6):
             win_short = False
             break
     else:
-        last_ret = (fut_soxs['Close'].iloc[-1] - entry_px_s) / entry_px_s
+        last_ret = (fut_sqqq['Close'].iloc[-1] - entry_px_s) / entry_px_s
         win_short = (last_ret > 0.0030)
 
     # Check each of the 6 tracks' candidates
@@ -150,12 +150,12 @@ for i in range(30, n_bars - 6):
     # Track 1: GBDT Refresh
     s1 = 1 if (s_ret >= 0.5) else (-1 if s_ret <= -0.5 else 0)
     # Track 2: OrderFlow
-    cvd_df = exp_orderflow.compute_cvd(sub_soxl)
+    cvd_df = exp_orderflow.compute_cvd(sub_tqqq)
     s2, c2, _ = exp_orderflow.predict_signal(cvd_df.iloc[-1])
     # Track 3: TDA
-    s3, c3, _ = exp_tda.predict_signal(sub_soxl)
+    s3, c3, _ = exp_tda.predict_signal(sub_tqqq)
     # Track 4: StateSpace
-    s4, c4, _ = exp_statespace.predict_signal(sub_soxl['Close'].values)
+    s4, c4, _ = exp_statespace.predict_signal(sub_tqqq['Close'].values)
     # Track 5: CrossAsset
     sx_ret = (sub_soxx['Close'].iloc[-1] / sub_soxx['Close'].iloc[-5] - 1.0) if len(sub_soxx) >= 5 else 0.0
     v_ret = (cur_vix / sub_vix['Close'].iloc[-5] - 1.0) if len(sub_vix) >= 5 else 0.0
@@ -174,8 +174,8 @@ for i in range(30, n_bars - 6):
         "win_short": win_short,
         "entry_px_l": entry_px_l,
         "entry_px_s": entry_px_s,
-        "fut_soxl": fut_soxl,
-        "fut_soxs": fut_soxs
+        "fut_tqqq": fut_tqqq,
+        "fut_sqqq": fut_sqqq
     })
 
 print(f"Generated {len(samples)} valid intraday evaluation bars.")
@@ -233,7 +233,7 @@ for T in THRESHOLDS:
         # If in position, check exits on current bar
         if in_market and current_pos != "NONE":
             bars_held += 1
-            curr_row = soxl_df.iloc[b_idx] if current_pos == "SOXL" else soxs_df.iloc[b_idx]
+            curr_row = tqqq_df.iloc[b_idx] if current_pos == "TQQQ" else sqqq_df.iloc[b_idx]
             curr_h = float(curr_row['High'])
             curr_l = float(curr_row['Low'])
             curr_c = float(curr_row['Close'])
@@ -298,10 +298,10 @@ for T in THRESHOLDS:
             
             # Sigmoid Absolute Threshold Filter: Top-1 Score >= T
             if top_score >= T and s["signals"][top_k] != 0:
-                direction = "SOXL" if s["signals"][top_k] == 1 else "SOXS"
+                direction = "TQQQ" if s["signals"][top_k] == 1 else "SQQQ"
                 in_market = True
                 current_pos = direction
-                entry_px = float(soxl_df['Close'].iloc[b_idx]) if direction == "SOXL" else float(soxs_df['Close'].iloc[b_idx])
+                entry_px = float(tqqq_df['Close'].iloc[b_idx]) if direction == "TQQQ" else float(sqqq_df['Close'].iloc[b_idx])
                 entry_time = bar_dt
                 bars_held = 0
 

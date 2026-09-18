@@ -50,7 +50,7 @@ for ep in ["/api/us/order", "/api/us/trade", "/api/us/acnt", "/api/us/quote"]:
         body = {
             "cano": kb.account_no,
             "acnt_prdt_cd": kb.account_type,
-            "symb": "SOXL",
+            "symb": "TQQQ",
             "excd": "NAS",
             "ord_qty": "1",
             "ord_unpr": "0",

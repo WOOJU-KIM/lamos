@@ -57,11 +57,11 @@ def run_live_verification():
     open_orders = broker.get_open_orders()
     print(f"   • 미체결/체결 내역(ust21050): {open_orders.get('open_orders_count', 0)}건 ({open_orders.get('msg', '정상')})")
 
-    soxl_quote = broker.get_stock_quote("SOXL")
-    soxs_quote = broker.get_stock_quote("SOXS")
-    soxl_px = float(soxl_quote.get("last_price", 0.0))
-    soxs_px = float(soxs_quote.get("last_price", 0.0))
-    print(f"   • REST 현재가 조회: SOXL=${soxl_px:.2f} | SOXS=${soxs_px:.2f}")
+    tqqq_quote = broker.get_stock_quote("TQQQ")
+    sqqq_quote = broker.get_stock_quote("SQQQ")
+    tqqq_px = float(tqqq_quote.get("last_price", 0.0))
+    sqqq_px = float(sqqq_quote.get("last_price", 0.0))
+    print(f"   • REST 현재가 조회: TQQQ=${tqqq_px:.2f} | SQQQ=${sqqq_px:.2f}")
 
     # -------------------------------------------------------------------------
     # 2. WebSocket 실시간 소켓 스트리밍 및 틱/체결 통보 확인
@@ -80,19 +80,19 @@ def run_live_verification():
     print("   ⏳ 소켓 틱 데이터 스트림 대기 (3초)...")
     time.sleep(3.2)
 
-    ws_soxl = ws.get_latest_price("SOXL", default=soxl_px)
-    ws_soxs = ws.get_latest_price("SOXS", default=soxs_px)
-    print(f"   • WebSocket 스트리밍 상태: {'✅ 10ms 틱 수신 정상' if (ws.is_connected or len(received_ticks) > 0 or ws_soxl > 0) else '⚠️ REST 대체 가동'}")
-    print(f"   • 소켓 실시간가: SOXL=${ws_soxl:.2f} | SOXS=${ws_soxs:.2f}")
+    ws_tqqq = ws.get_latest_price("TQQQ", default=tqqq_px)
+    ws_sqqq = ws.get_latest_price("SQQQ", default=sqqq_px)
+    print(f"   • WebSocket 스트리밍 상태: {'✅ 10ms 틱 수신 정상' if (ws.is_connected or len(received_ticks) > 0 or ws_tqqq > 0) else '⚠️ REST 대체 가동'}")
+    print(f"   • 소켓 실시간가: TQQQ=${ws_tqqq:.2f} | SQQQ=${ws_sqqq:.2f}")
 
     # -------------------------------------------------------------------------
     # 3. AI MoE 3-Class 실시간 타점 및 시그널 발생 테스트
     # -------------------------------------------------------------------------
     print("\n⏳ [3/5] 신규 3-Class Triple Barrier MoE 오케스트레이터 실시간 시그널 연산 점검...")
     data_lake = MarketDataLake()
-    soxl_15m = data_lake.get_candles_with_live_tick("SOXL", "15m", live_price=ws_soxl)
+    tqqq_15m = data_lake.get_candles_with_live_tick("TQQQ", "15m", live_price=ws_tqqq)
     moe = MoEMetaOrchestrator()
-    moe_res = moe.evaluate_dual_filter_signal(soxl_15m, threshold=0.75)
+    moe_res = moe.evaluate_dual_filter_signal(tqqq_15m, threshold=0.75)
 
     exp_name = moe_res.get("expert_desc", "MoE Gating")
     top_conf = float(moe_res.get("gating_confidence", 0.0)) * 100.0
@@ -110,15 +110,15 @@ def run_live_verification():
     # 4. 실전 주문 TR 전문 송수신 & 취소 신호 테스트
     # -------------------------------------------------------------------------
     print("\n⏳ [4/5] 키움 주문 발주(TR: ust20000) 및 즉시 취소(TR: ust20003) 신호 송수신...")
-    order_px = round(ws_soxl + 0.03, 2) if ws_soxl > 0 else 30.0
+    order_px = round(ws_tqqq + 0.03, 2) if ws_tqqq > 0 else 30.0
     try:
-        buy_res = broker.send_order("SOXL", "BUY", 1, price=order_px)
+        buy_res = broker.send_order("TQQQ", "BUY", 1, price=order_px)
         ord_no = str(buy_res.get("order_no", "")).strip()
         print(f"   • 1주 매수 발주 신호 전송: ok={buy_res.get('ok')}, 주문번호={ord_no}, 단가=${order_px:.2f}")
 
         if ord_no:
             time.sleep(0.5)
-            cancel_res = broker.cancel_order(order_no=ord_no, symbol="SOXL", quantity=1)
+            cancel_res = broker.cancel_order(order_no=ord_no, symbol="TQQQ", quantity=1)
             print(f"   • 주문 취소 신호 전송: ok={cancel_res.get('ok')}, 취소 주문번호={cancel_res.get('order_no')}")
         else:
             print("   • 주문번호 생성 완료")
@@ -145,7 +145,7 @@ def run_live_verification():
 • **선택 모델:** `{exp_name}`
 • **확신도:** `{top_conf:.1f}점` (기준: `75.0점`)
 • **방향성:** `{direction}` (승인 여부: `{is_approved}`)
-• **실시간 시세:** SOXL `${ws_soxl:.2f}` / SOXS `${ws_soxs:.2f}`
+• **실시간 시세:** TQQQ `${ws_tqqq:.2f}` / SQQQ `${ws_sqqq:.2f}`
 
 ━━━━━━━━━━━━━━━━━━━━
 대표님, 증권사 REST, 소켓, AI 시그널, 주문 발주/취소 채널이 모두 100% 정상 작동 중입니다."""

@@ -41,19 +41,19 @@ print(f"• 증권사 체결 건수: {len(execs)}건")
 for ex in execs:
     print(f"  - {ex}")
 
-# 2. 새벽 장세 분석 및 AI 능동 의사결정 (SOXL vs SOXS)
-print("\n2. 🧠 [새벽 장세 국면 및 AI 능동 SOXS/SOXL 스캔 분석]")
+# 2. 새벽 장세 분석 및 AI 능동 의사결정 (TQQQ vs SQQQ)
+print("\n2. 🧠 [새벽 장세 국면 및 AI 능동 SQQQ/TQQQ 스캔 분석]")
 lake = MarketDataLake()
-soxl_15m = lake.load_candles("SOXL", "15m")
-soxs_15m = lake.load_candles("SOXS", "15m")
+tqqq_15m = lake.load_candles("TQQQ", "15m")
+sqqq_15m = lake.load_candles("SQQQ", "15m")
 
 moe = MoEMetaOrchestrator(confidence_threshold=0.75)
-soxl_eval = moe.evaluate_dual_filter_signal(soxl_15m, threshold=0.75)
-soxs_eval = moe.evaluate_dual_filter_signal(soxs_15m, threshold=0.75)
+tqqq_eval = moe.evaluate_dual_filter_signal(tqqq_15m, threshold=0.75)
+sqqq_eval = moe.evaluate_dual_filter_signal(sqqq_15m, threshold=0.75)
 
 print(f"• 현재 MoE 게이팅 스캔 결과:")
-print(f"  - SOXL 스캔: 지목 [{soxl_eval.get('expert_desc')}] | 확신도: {soxl_eval.get('gating_confidence', 0)*100:.1f}점 | 방향: {soxl_eval.get('direction')} | 승인: {soxl_eval.get('is_approved')}")
-print(f"  - SOXS 스캔: 지목 [{soxs_eval.get('expert_desc')}] | 확신도: {soxs_eval.get('gating_confidence', 0)*100:.1f}점 | 방향: {soxs_eval.get('direction')} | 승인: {soxs_eval.get('is_approved')}")
+print(f"  - TQQQ 스캔: 지목 [{tqqq_eval.get('expert_desc')}] | 확신도: {tqqq_eval.get('gating_confidence', 0)*100:.1f}점 | 방향: {tqqq_eval.get('direction')} | 승인: {tqqq_eval.get('is_approved')}")
+print(f"  - SQQQ 스캔: 지목 [{sqqq_eval.get('expert_desc')}] | 확신도: {sqqq_eval.get('gating_confidence', 0)*100:.1f}점 | 방향: {sqqq_eval.get('direction')} | 승인: {sqqq_eval.get('is_approved')}")
 
 # 3. 섀도우 원장 DB 조회
 print("\n3. 💾 [DB 적재 의사결정 및 체결 내역]")

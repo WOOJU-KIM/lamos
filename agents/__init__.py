@@ -1,4 +1,4 @@
-"""SOXL/SOXS Autonomous Quant Trading Multi-Agent Team"""
+"""TQQQ/SQQQ Autonomous Quant Trading Multi-Agent Team"""
 from .data_agent import DataAgent
 from .strategy_agent import StrategyAgent
 from .risk_agent import RiskAgent

@@ -31,12 +31,12 @@ def run_volatility_sniper_backtest():
     lake = MarketDataLake()
     print("⏳ [1/4] Loading multi-timeframe market candles from DataLake...")
 
-    soxl_15m = lake.load_candles("SOXL", "15m")
-    soxs_15m = lake.load_candles("SOXS", "15m")
-    soxl_5m  = lake.load_candles("SOXL", "5m")
-    soxs_5m  = lake.load_candles("SOXS", "5m")
+    tqqq_15m = lake.load_candles("TQQQ", "15m")
+    sqqq_15m = lake.load_candles("SQQQ", "15m")
+    tqqq_5m  = lake.load_candles("TQQQ", "5m")
+    sqqq_5m  = lake.load_candles("SQQQ", "5m")
     soxx_60m = lake.load_candles("SOXX", "60m")
-    soxl_60m = lake.load_candles("SOXL", "60m")
+    tqqq_60m = lake.load_candles("TQQQ", "60m")
     soxx_15m = lake.load_candles("SOXX", "15m")
     nvda_15m = lake.load_candles("NVDA", "15m")
     qqq_15m  = lake.load_candles("QQQ", "15m")
@@ -44,66 +44,66 @@ def run_volatility_sniper_backtest():
 
     # Screen 1 EMA20 precalculation on 60m
     soxx_60m['ema20'] = soxx_60m['Close'].ewm(span=20, adjust=False).mean()
-    soxl_60m['ema20'] = soxl_60m['Close'].ewm(span=20, adjust=False).mean()
+    tqqq_60m['ema20'] = tqqq_60m['Close'].ewm(span=20, adjust=False).mean()
 
-    for df in [soxl_15m, soxs_15m, soxl_5m, soxs_5m, soxx_60m, soxl_60m, soxx_15m, nvda_15m, qqq_15m, vix_15m]:
+    for df in [tqqq_15m, sqqq_15m, tqqq_5m, sqqq_5m, soxx_60m, tqqq_60m, soxx_15m, nvda_15m, qqq_15m, vix_15m]:
         df['datetime_dt'] = pd.to_datetime(df['datetime'])
         df['date_str'] = df['datetime_dt'].dt.strftime('%Y-%m-%d')
         df['time_str'] = df['datetime_dt'].dt.strftime('%H:%M')
 
     print("⏳ [2/4] Pre-processing Phase 1 ML GBDT & Cross-Asset Causal Vectors...")
     ml_15m = MLFeatureEngine()
-    soxl_15m_feat = ml_15m.extract_features(soxl_15m)
-    soxl_15m_feat = ml_15m.add_confidence_columns(soxl_15m_feat)
-    soxs_15m_feat = ml_15m.extract_features(soxs_15m)
-    soxs_15m_feat.set_index('datetime', inplace=True, drop=False)
+    tqqq_15m_feat = ml_15m.extract_features(tqqq_15m)
+    tqqq_15m_feat = ml_15m.add_confidence_columns(tqqq_15m_feat)
+    sqqq_15m_feat = ml_15m.extract_features(sqqq_15m)
+    sqqq_15m_feat.set_index('datetime', inplace=True, drop=False)
 
     cross_mod = CrossAssetDislocationModel(dislocation_z_threshold=1.6)
     nvda_map = nvda_15m.set_index('datetime')['Close'].to_dict()
     soxx_map = soxx_15m.set_index('datetime')['Close'].to_dict()
     qqq_map = qqq_15m.set_index('datetime')['Close'].to_dict()
     vix_map = vix_15m.set_index('datetime')['Close'].to_dict()
-    soxl_close = soxl_15m['Close'].values
-    soxl_dt = soxl_15m['datetime'].values
+    tqqq_close = tqqq_15m['Close'].values
+    tqqq_dt = tqqq_15m['datetime'].values
 
     cross_dirs = []
     cross_confs = []
-    for i in range(len(soxl_15m)):
+    for i in range(len(tqqq_15m)):
         if i < 5:
             cross_dirs.append('NONE'); cross_confs.append(0.50); continue
-        c_t, p_t = soxl_dt[i], soxl_dt[i-5]
+        c_t, p_t = tqqq_dt[i], tqqq_dt[i-5]
         if c_t in nvda_map and p_t in nvda_map and c_t in qqq_map and p_t in qqq_map and c_t in vix_map and p_t in vix_map:
-            s_r = float(soxl_close[i]/soxl_close[i-5] - 1.0)
+            s_r = float(tqqq_close[i]/tqqq_close[i-5] - 1.0)
             n_r = float(nvda_map[c_t]/nvda_map[p_t] - 1.0)
             sx_r = float(soxx_map[c_t]/soxx_map[p_t] - 1.0) if c_t in soxx_map and p_t in soxx_map else n_r
             q_r = float(qqq_map[c_t]/qqq_map[p_t] - 1.0)
             v_r = float(vix_map[c_t]/vix_map[p_t] - 1.0)
-            code, conf, _ = cross_mod.predict_signal(soxl_ret=s_r, nvda_ret=n_r, soxx_ret=sx_r, qqq_ret=q_r, vix_ret=v_r, tnx_ret=0.0)
-            c_dir = 'LONG_SOXL' if code > 0 else ('SHORT_SOXS' if code < 0 else 'NONE')
+            code, conf, _ = cross_mod.predict_signal(tqqq_ret=s_r, nvda_ret=n_r, soxx_ret=sx_r, qqq_ret=q_r, vix_ret=v_r, tnx_ret=0.0)
+            c_dir = 'LONG_TQQQ' if code > 0 else ('SHORT_SQQQ' if code < 0 else 'NONE')
             cross_dirs.append(c_dir); cross_confs.append(conf)
         else:
             cross_dirs.append('NONE'); cross_confs.append(0.50)
 
-    soxl_15m_feat['cross_dir'] = cross_dirs
-    soxl_15m_feat['cross_conf'] = cross_confs
+    tqqq_15m_feat['cross_dir'] = cross_dirs
+    tqqq_15m_feat['cross_conf'] = cross_confs
 
     print("⏳ [3/4] Engineering Rolling Intraday VWAP, Daily High/Low, and Volume Accelerators...")
     # Real-time Daily Cumulative VWAP, Daily High, Daily Low resetting every day at 09:30
-    soxl_15m_feat['cum_vol'] = soxl_15m_feat.groupby('date_str')['Volume'].cumsum()
-    soxl_15m_feat['cum_pv'] = soxl_15m_feat.groupby('date_str').apply(lambda x: (x['Close'] * x['Volume']).cumsum()).reset_index(level=0, drop=True)
-    soxl_15m_feat['intraday_vwap'] = soxl_15m_feat['cum_pv'] / (soxl_15m_feat['cum_vol'] + 1e-6)
+    tqqq_15m_feat['cum_vol'] = tqqq_15m_feat.groupby('date_str')['Volume'].cumsum()
+    tqqq_15m_feat['cum_pv'] = tqqq_15m_feat.groupby('date_str').apply(lambda x: (x['Close'] * x['Volume']).cumsum()).reset_index(level=0, drop=True)
+    tqqq_15m_feat['intraday_vwap'] = tqqq_15m_feat['cum_pv'] / (tqqq_15m_feat['cum_vol'] + 1e-6)
 
     # Intraday cumulative High and Low (rolling from 09:30 open up to the current 15m bar)
-    soxl_15m_feat['daily_high'] = soxl_15m_feat.groupby('date_str')['High'].cummax()
-    soxl_15m_feat['daily_low'] = soxl_15m_feat.groupby('date_str')['Low'].cummin()
+    tqqq_15m_feat['daily_high'] = tqqq_15m_feat.groupby('date_str')['High'].cummax()
+    tqqq_15m_feat['daily_low'] = tqqq_15m_feat.groupby('date_str')['Low'].cummin()
 
     # Prior 3-candle rolling average volume (momentum accelerator)
     # Using shift(1) to avoid lookahead bias
-    soxl_15m_feat['vol_ma3_prior'] = soxl_15m_feat.groupby('date_str')['Volume'].shift(1).rolling(3, min_periods=1).mean()
+    tqqq_15m_feat['vol_ma3_prior'] = tqqq_15m_feat.groupby('date_str')['Volume'].shift(1).rolling(3, min_periods=1).mean()
 
-    soxl_15m_feat.set_index('datetime', inplace=True, drop=False)
+    tqqq_15m_feat.set_index('datetime', inplace=True, drop=False)
 
-    unique_dates = sorted(soxl_15m['date_str'].unique())
+    unique_dates = sorted(tqqq_15m['date_str'].unique())
 
     # Execution Constants
     SLIPPAGE = 0.03
@@ -125,9 +125,9 @@ def run_volatility_sniper_backtest():
         daily_stoploss_count = 0
 
         for d_str in unique_dates:
-            day_15 = soxl_15m_feat[soxl_15m_feat['date_str'] == d_str]
-            day_5_l = soxl_5m[soxl_5m['date_str'] == d_str]
-            day_5_s = soxs_5m[soxs_5m['date_str'] == d_str]
+            day_15 = tqqq_15m_feat[tqqq_15m_feat['date_str'] == d_str]
+            day_5_l = tqqq_5m[tqqq_5m['date_str'] == d_str]
+            day_5_s = sqqq_5m[sqqq_5m['date_str'] == d_str]
             if len(day_15) < 5:
                 continue
 
@@ -164,42 +164,42 @@ def run_volatility_sniper_backtest():
                     dir_cross = row_15['cross_dir']
                     conf_cross = float(row_15['cross_conf'])
 
-                    is_gbdt = (dir_gbdt in ['LONG_SOXL', 'SHORT_SOXS']) and (conf_gbdt >= 0.60)
+                    is_gbdt = (dir_gbdt in ['LONG_TQQQ', 'SHORT_SQQQ']) and (conf_gbdt >= 0.60)
                     is_opposite_veto = (
-                        (dir_gbdt == 'LONG_SOXL' and dir_cross == 'SHORT_SOXS' and conf_cross >= 0.60) or
-                        (dir_gbdt == 'SHORT_SOXS' and dir_cross == 'LONG_SOXL' and conf_cross >= 0.60)
+                        (dir_gbdt == 'LONG_TQQQ' and dir_cross == 'SHORT_SQQQ' and conf_cross >= 0.60) or
+                        (dir_gbdt == 'SHORT_SQQQ' and dir_cross == 'LONG_TQQQ' and conf_cross >= 0.60)
                     )
 
                     if not (is_gbdt and not is_opposite_veto):
                         b_idx += 1; continue
 
-                    chosen_sym = 'SOXL' if dir_gbdt == 'LONG_SOXL' else 'SOXS'
+                    chosen_sym = 'TQQQ' if dir_gbdt == 'LONG_TQQQ' else 'SQQQ'
 
                     # Screen 1: 60m trend
                     past_soxx = soxx_60m[soxx_60m['datetime'] <= cur_time]
-                    past_soxl = soxl_60m[soxl_60m['datetime'] <= cur_time]
-                    if len(past_soxx) < 20 or len(past_soxl) < 20:
+                    past_tqqq = tqqq_60m[tqqq_60m['datetime'] <= cur_time]
+                    if len(past_soxx) < 20 or len(past_tqqq) < 20:
                         b_idx += 1; continue
                     soxx_c = past_soxx['Close'].iloc[-1]
-                    soxl_c = past_soxl['Close'].iloc[-1]
+                    tqqq_c = past_tqqq['Close'].iloc[-1]
                     soxx_ema = past_soxx['ema20'].iloc[-1]
-                    soxl_ema = past_soxl['ema20'].iloc[-1]
-                    if chosen_sym == 'SOXL' and not (soxx_c >= soxx_ema * 0.998 and soxl_c >= soxl_ema * 0.998):
+                    tqqq_ema = past_tqqq['ema20'].iloc[-1]
+                    if chosen_sym == 'TQQQ' and not (soxx_c >= soxx_ema * 0.998 and tqqq_c >= tqqq_ema * 0.998):
                         b_idx += 1; continue
-                    elif chosen_sym == 'SOXS' and not (soxx_c <= soxx_ema * 1.002):
+                    elif chosen_sym == 'SQQQ' and not (soxx_c <= soxx_ema * 1.002):
                         b_idx += 1; continue
 
                     # Screen 3: Dip filter
-                    if chosen_sym == 'SOXL':
+                    if chosen_sym == 'TQQQ':
                         vd = float(row_15.get('VWAP_Diff', 0.0))
                         r14 = float(row_15.get('RSI_14', 50.0))
                         bbl = float(row_15.get('BB_Lower', 0.0))
                         if not (vd <= 1.5 and r14 <= 62.0 and (bbl <= 0 or float(row_15['Close']) >= bbl * 1.001)):
                             b_idx += 1; continue
                     else:
-                        if cur_time not in soxs_15m_feat.index:
+                        if cur_time not in sqqq_15m_feat.index:
                             b_idx += 1; continue
-                        rs = soxs_15m_feat.loc[cur_time]
+                        rs = sqqq_15m_feat.loc[cur_time]
                         vd = float(rs.get('VWAP_Diff', 0.0))
                         r14 = float(rs.get('RSI_14', 50.0))
                         bbl = float(rs.get('BB_Lower', 0.0))
@@ -224,18 +224,18 @@ def run_volatility_sniper_backtest():
                     # Momentum acceleration condition: Volume > 3-bar rolling MA
                     vol_surge = (cur_vol > vol_ma3) if vol_ma3 > 0 else True
 
-                    # 1. SOXL (롱 돌파): Spot > VWAP AND Spot >= Daily_High * 0.99 AND Volume > MA3
-                    cond_soxl = (spot_px > vwap_px) and (spot_px >= d_high * 0.99) and vol_surge
+                    # 1. TQQQ (롱 돌파): Spot > VWAP AND Spot >= Daily_High * 0.99 AND Volume > MA3
+                    cond_tqqq = (spot_px > vwap_px) and (spot_px >= d_high * 0.99) and vol_surge
 
-                    # 2. SOXS (숏 돌파): Spot < VWAP AND Spot <= Daily_Low * 1.01 AND Volume > MA3
-                    cond_soxs = (spot_px < vwap_px) and (spot_px <= d_low * 1.01) and vol_surge
+                    # 2. SQQQ (숏 돌파): Spot < VWAP AND Spot <= Daily_Low * 1.01 AND Volume > MA3
+                    cond_sqqq = (spot_px < vwap_px) and (spot_px <= d_low * 1.01) and vol_surge
 
-                    if cond_soxl and not cond_soxs:
-                        chosen_sym = 'SOXL'
+                    if cond_tqqq and not cond_sqqq:
+                        chosen_sym = 'TQQQ'
                         phase_tag = "Phase 2 (Vol Sniper)"
                         trigger_desc = f"High Breakout (P={spot_px:.2f} >= {d_high*0.99:.2f}, V={cur_vol/vol_ma3:.1f}x)"
-                    elif cond_soxs and not cond_soxl:
-                        chosen_sym = 'SOXS'
+                    elif cond_sqqq and not cond_tqqq:
+                        chosen_sym = 'SQQQ'
                         phase_tag = "Phase 2 (Vol Sniper)"
                         trigger_desc = f"Low Breakdown (P={spot_px:.2f} <= {d_low*1.01:.2f}, V={cur_vol/vol_ma3:.1f}x)"
                     else:
@@ -245,14 +245,14 @@ def run_volatility_sniper_backtest():
                     b_idx += 1; continue
 
                 # Position Entry
-                base_px = float(row_15['Close']) if chosen_sym == 'SOXL' else float(soxs_15m_feat.loc[cur_time]['Close'])
+                base_px = float(row_15['Close']) if chosen_sym == 'TQQQ' else float(sqqq_15m_feat.loc[cur_time]['Close'])
                 entry_px = round(base_px + SLIPPAGE, 2)
                 shares = int(capital / entry_px)
                 invested = shares * entry_px
                 if shares <= 0:
                     b_idx += 1; continue
 
-                target_5m = day_5_l if chosen_sym == 'SOXL' else day_5_s
+                target_5m = day_5_l if chosen_sym == 'TQQQ' else day_5_s
                 post_5m = target_5m[target_5m['datetime'] > cur_time]
                 if post_5m.empty:
                     b_idx += 1; continue

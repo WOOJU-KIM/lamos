@@ -5,7 +5,7 @@ conn = sqlite3.connect('data/market_data.db')
 df = pd.read_sql_query("""
     SELECT datetime, open, high, low, close, volume 
     FROM market_candles 
-    WHERE symbol='SOXS' AND timeframe='5m' AND datetime >= '2026-08-21 10:00:00'
+    WHERE symbol='SQQQ' AND timeframe='5m' AND datetime >= '2026-08-21 10:00:00'
     ORDER BY datetime ASC
 """, conn)
 conn.close()

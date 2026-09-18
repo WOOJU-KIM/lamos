@@ -18,18 +18,18 @@ class TestLiveExecutionSafety(unittest.TestCase):
         streamer.is_connected = True
         
         # 초기 상태: 틱 수신 전이므로 False
-        self.assertFalse(streamer.has_received_live_tick("SOXL"))
-        self.assertFalse(streamer.is_live_stream_active("SOXL"))
+        self.assertFalse(streamer.has_received_live_tick("TQQQ"))
+        self.assertFalse(streamer.is_live_stream_active("TQQQ"))
 
         # REST 백업 틱은 ws_tick_received를 True로 만들지 않아야 함
-        streamer._update_price("SOXL", 100.5, {"provider": "REST_FALLBACK"}, from_ws=False)
-        self.assertFalse(streamer.has_received_live_tick("SOXL"))
+        streamer._update_price("TQQQ", 100.5, {"provider": "REST_FALLBACK"}, from_ws=False)
+        self.assertFalse(streamer.has_received_live_tick("TQQQ"))
 
         # 실제 WebSocket 틱 유입 시 True로 전환
-        streamer._update_price("SOXL", 100.8, {"provider": "WS_0A"}, from_ws=True)
-        self.assertTrue(streamer.has_received_live_tick("SOXL"))
-        self.assertTrue(streamer.is_live_stream_active("SOXL"))
-        self.assertEqual(streamer.ws_tick_count["SOXL"], 1)
+        streamer._update_price("TQQQ", 100.8, {"provider": "WS_0A"}, from_ws=True)
+        self.assertTrue(streamer.has_received_live_tick("TQQQ"))
+        self.assertTrue(streamer.is_live_stream_active("TQQQ"))
+        self.assertEqual(streamer.ws_tick_count["TQQQ"], 1)
         print("✅ [Test 1 통과] WebSocket 실시간 틱 게이팅 및 REST 오인 방지 검증 완료")
 
     def test_2_ledger_entry_price_synchronization(self):
@@ -40,7 +40,7 @@ class TestLiveExecutionSafety(unittest.TestCase):
             "ok": True,
             "holdings": [
                 {
-                    "symbol": "SOXL",
+                    "symbol": "TQQQ",
                     "quantity": 467,
                     "purchase_price": 101.50,
                     "avg_price": 101.50,
@@ -52,7 +52,7 @@ class TestLiveExecutionSafety(unittest.TestCase):
         
         # Order was sent at $121.85, but broker ledger filled at $101.50
         synced_px, synced_qty = runner._sync_real_ledger_entry(
-            symbol="SOXL",
+            symbol="TQQQ",
             default_price=121.85,
             default_qty=577
         )
@@ -68,7 +68,7 @@ class TestLiveExecutionSafety(unittest.TestCase):
 
         # 모의투자 청산 알림
         notifier.send_exit_alert(
-            ticker="SOXL",
+            ticker="TQQQ",
             entry_price=101.50,
             exit_price=101.65,
             exit_reason="🛑 칼손절 방어 (-16.58%)",
@@ -80,7 +80,7 @@ class TestLiveExecutionSafety(unittest.TestCase):
 
         # 실전투자 청산 알림
         notifier.send_exit_alert(
-            ticker="SOXL",
+            ticker="TQQQ",
             entry_price=101.50,
             exit_price=101.65,
             exit_reason="🎯 목표 익절 (+3.0%)",
@@ -103,7 +103,7 @@ class TestLiveExecutionSafety(unittest.TestCase):
             "data": [
                 {
                     "type": "FT",
-                    "item": "SOXL",
+                    "item": "TQQQ",
                     "values": {
                         "21": "095700",
                         "41": "-101.5000",
@@ -116,12 +116,12 @@ class TestLiveExecutionSafety(unittest.TestCase):
         })
 
         # FT 패킷 처리 전
-        self.assertFalse(streamer.has_received_live_tick("SOXL"))
+        self.assertFalse(streamer.has_received_live_tick("TQQQ"))
 
         # FT 패킷 처리 후: 체결 통보로 잘못 스킵되지 않고 즉시 틱 수신 True 및 호가 반영
         streamer._process_message(raw_ft)
-        self.assertTrue(streamer.has_received_live_tick("SOXL"))
-        self.assertEqual(streamer.get_latest_price("SOXL"), 101.45)
+        self.assertTrue(streamer.has_received_live_tick("TQQQ"))
+        self.assertEqual(streamer.get_latest_price("TQQQ"), 101.45)
         print("✅ [Test 4 통과] FT 호가 패킷 시세 정상 파싱 및 WebSocket 틱 활성화 검증 완료")
 
 if __name__ == "__main__":

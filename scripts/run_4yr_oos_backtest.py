@@ -36,7 +36,7 @@ HEADERS = {
     "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY
 }
 
-SYMBOLS = ["SOXL", "SOXS", "SOXX", "QQQ", "NVDA", "VIXY", "IEF"]
+SYMBOLS = ["TQQQ", "SQQQ", "SOXX", "QQQ", "NVDA", "VIXY", "IEF"]
 
 def fetch_alpaca_bars(symbol: str, start_iso: str, end_iso: str, timeframe: str = "15Min") -> pd.DataFrame:
     """Alpaca IEX API로부터 지정 기간 15분봉 전량 수집 (페이징 지원)"""
@@ -176,11 +176,11 @@ def step2_train_in_sample_model():
     print("🧠 [2단계] 인샘플 과거 2년(2022.09.15 ~ 2024.09.14) 전용 GBDT 모델 학습 시작 (미래 데이터 100% 차단)")
     print("=" * 100)
     
-    soxl_15m = lake.load_candles("SOXL", "15m", start_dt="2022-09-15", end_dt="2024-09-14 16:00:00")
-    print(f"📊 인샘플 SOXL 15분봉 데이터: {len(soxl_15m):,}개 봉")
+    tqqq_15m = lake.load_candles("TQQQ", "15m", start_dt="2022-09-15", end_dt="2024-09-14 16:00:00")
+    print(f"📊 인샘플 TQQQ 15분봉 데이터: {len(tqqq_15m):,}개 봉")
     
     ml_engine = MLFeatureEngine(confidence_threshold=0.60)
-    df_feat = ml_engine.extract_features(soxl_15m)
+    df_feat = ml_engine.extract_features(tqqq_15m)
     
     # 모델 학습 및 Top 피처 선별
     model, top_10, top_3 = ml_engine.train_and_select_top_features(df_feat)
@@ -197,8 +197,8 @@ def step3_run_4yr_simulation(ml_engine: MLFeatureEngine):
     print("=" * 100)
     
     # 4개년 전 데이터 로드
-    soxl_15m = lake.load_candles("SOXL", "15m")
-    soxs_15m = lake.load_candles("SOXS", "15m")
+    tqqq_15m = lake.load_candles("TQQQ", "15m")
+    sqqq_15m = lake.load_candles("SQQQ", "15m")
     soxx_60m = lake.load_candles("SOXX", "60m")
     nvda_15m = lake.load_candles("NVDA", "15m")
     soxx_15m = lake.load_candles("SOXX", "15m")
@@ -211,12 +211,12 @@ def step3_run_4yr_simulation(ml_engine: MLFeatureEngine):
     soxx_60m_map = soxx_60m.set_index('datetime')
     
     # 피처 추출 및 GBDT 확신도 산출 (인샘플 학습 모델 적용)
-    soxl_feat = ml_engine.extract_features(soxl_15m)
-    soxl_feat = ml_engine.add_confidence_columns(soxl_feat)
+    tqqq_feat = ml_engine.extract_features(tqqq_15m)
+    tqqq_feat = ml_engine.add_confidence_columns(tqqq_feat)
     
-    soxs_feat = ml_engine.extract_features(soxs_15m)
-    soxs_feat = ml_engine.add_confidence_columns(soxs_feat)
-    soxs_feat.set_index('datetime', inplace=True, drop=False)
+    sqqq_feat = ml_engine.extract_features(sqqq_15m)
+    sqqq_feat = ml_engine.add_confidence_columns(sqqq_feat)
+    sqqq_feat.set_index('datetime', inplace=True, drop=False)
     
     # 크로스에셋 가격 맵
     nvda_map = nvda_15m.set_index('datetime')['Close'].to_dict()
@@ -228,10 +228,10 @@ def step3_run_4yr_simulation(ml_engine: MLFeatureEngine):
     cross_mod = CrossAssetDislocationModel(dislocation_z_threshold=1.6)
     
     # 날짜별 15분봉 인덱싱
-    soxl_feat['date_str'] = pd.to_datetime(soxl_feat['datetime']).dt.strftime('%Y-%m-%d')
-    soxl_feat['time_str'] = pd.to_datetime(soxl_feat['datetime']).dt.strftime('%H:%M')
+    tqqq_feat['date_str'] = pd.to_datetime(tqqq_feat['datetime']).dt.strftime('%Y-%m-%d')
+    tqqq_feat['time_str'] = pd.to_datetime(tqqq_feat['datetime']).dt.strftime('%H:%M')
     
-    unique_dates = sorted(soxl_feat['date_str'].unique())
+    unique_dates = sorted(tqqq_feat['date_str'].unique())
     print(f"📅 총 거래일수: {len(unique_dates)}일 ({unique_dates[0]} ~ {unique_dates[-1]})")
     
     # 시뮬레이션 상태 변수
@@ -242,33 +242,33 @@ def step3_run_4yr_simulation(ml_engine: MLFeatureEngine):
     
     trades = []
     trade_id = 0
-    active_pos = None  # {'sym': 'SOXL', 'entry_px': float, 'entry_dt': str, 'bars': int}
+    active_pos = None  # {'sym': 'TQQQ', 'entry_px': float, 'entry_dt': str, 'bars': int}
     
     slippage_rate = 0.0020  # 왕복 0.05% 슬리피지/수수료
     
     for dt_day in unique_dates:
-        day_bars = soxl_feat[soxl_feat['date_str'] == dt_day]
+        day_bars = tqqq_feat[tqqq_feat['date_str'] == dt_day]
         
         for idx, row in day_bars.iterrows():
             curr_dt = row['datetime']
             time_str = row['time_str']
-            cur_soxl_close = float(row['Close'])
-            cur_soxl_high = float(row['High'])
-            cur_soxl_low = float(row['Low'])
+            cur_tqqq_close = float(row['Close'])
+            cur_tqqq_high = float(row['High'])
+            cur_tqqq_low = float(row['Low'])
             
-            soxs_row = soxs_feat.loc[curr_dt] if curr_dt in soxs_feat.index else None
-            cur_soxs_close = float(soxs_row['Close']) if soxs_row is not None else 0.0
-            cur_soxs_high = float(soxs_row['High']) if soxs_row is not None else 0.0
-            cur_soxs_low = float(soxs_row['Low']) if soxs_row is not None else 0.0
+            sqqq_row = sqqq_feat.loc[curr_dt] if curr_dt in sqqq_feat.index else None
+            cur_sqqq_close = float(sqqq_row['Close']) if sqqq_row is not None else 0.0
+            cur_sqqq_high = float(sqqq_row['High']) if sqqq_row is not None else 0.0
+            cur_sqqq_low = float(sqqq_row['Low']) if sqqq_row is not None else 0.0
             
             # 1. 기존 포지션 보유 중인 경우: 4대 청산 룰 검사 (+3.0% TP, -2.0% SL, 90분 타임스탑, 15:45 EOD)
             if active_pos is not None:
                 active_pos['bars'] += 1
                 sym = active_pos['sym']
                 entry_px = active_pos['entry_px']
-                cur_close = cur_soxl_close if sym == 'SOXL' else cur_soxs_close
-                cur_high = cur_soxl_high if sym == 'SOXL' else cur_soxs_high
-                cur_low = cur_soxl_low if sym == 'SOXL' else cur_soxs_low
+                cur_close = cur_tqqq_close if sym == 'TQQQ' else cur_sqqq_close
+                cur_high = cur_tqqq_high if sym == 'TQQQ' else cur_sqqq_high
+                cur_low = cur_tqqq_low if sym == 'TQQQ' else cur_sqqq_low
                 
                 exit_price = None
                 exit_reason = None
@@ -368,9 +368,9 @@ def step3_run_4yr_simulation(ml_engine: MLFeatureEngine):
                     ief_r  = (i_px / p_i - 1.0) if (i_px and p_i) else 0.0
                     tnx_proxy_ret = -ief_r
                     
-                    soxl_r = (cur_soxl_close / day_bars.iloc[cur_bar_idx - 5]['Close']) - 1.0
+                    tqqq_r = (cur_tqqq_close / day_bars.iloc[cur_bar_idx - 5]['Close']) - 1.0
                     sig_code, _, _ = cross_mod.predict_signal(
-                        soxl_ret=soxl_r,
+                        tqqq_ret=tqqq_r,
                         nvda_ret=nvda_r,
                         soxx_ret=soxx_r,
                         qqq_ret=qqq_r,
@@ -378,24 +378,24 @@ def step3_run_4yr_simulation(ml_engine: MLFeatureEngine):
                         tnx_ret=tnx_proxy_ret
                     )
                     if sig_code > 0:
-                        cross_dir = "LONG_SOXL"
+                        cross_dir = "LONG_TQQQ"
                     elif sig_code < 0:
-                        cross_dir = "SHORT_SOXS"
+                        cross_dir = "SHORT_SQQQ"
                         
                 # 🎯 진입 판정: GBDT >= 60% & 대추세 정렬 & 크로스에셋 Veto 통과
-                # A. SOXL 롱 진입
-                if dir_gbdt == "LONG_SOXL" and conf_gbdt >= 0.60 and soxx_60m_bull and cross_dir != "SHORT_SOXS":
+                # A. TQQQ 롱 진입
+                if dir_gbdt == "LONG_TQQQ" and conf_gbdt >= 0.60 and soxx_60m_bull and cross_dir != "SHORT_SQQQ":
                     active_pos = {
-                        'sym': 'SOXL',
-                        'entry_px': cur_soxl_close,
+                        'sym': 'TQQQ',
+                        'entry_px': cur_tqqq_close,
                         'entry_dt': curr_dt,
                         'bars': 0
                     }
-                # B. SOXS 숏 진입
-                elif dir_gbdt == "SHORT_SOXS" and conf_gbdt >= 0.60 and soxx_60m_bear and cross_dir != "LONG_SOXL":
+                # B. SQQQ 숏 진입
+                elif dir_gbdt == "SHORT_SQQQ" and conf_gbdt >= 0.60 and soxx_60m_bear and cross_dir != "LONG_TQQQ":
                     active_pos = {
-                        'sym': 'SOXS',
-                        'entry_px': cur_soxs_close,
+                        'sym': 'SQQQ',
+                        'entry_px': cur_sqqq_close,
                         'entry_dt': curr_dt,
                         'bars': 0
                     }
@@ -423,7 +423,7 @@ def step4_generate_tables(trades: List[Dict[str, Any]], initial_capital: float):
         if sub_df.empty:
             return {
                 'trades': 0, 'win_rate': 0.0, 'pf': 0.0, 'pnl': 0, 'ret_pct': 0.0, 'end_cap': start_cap,
-                'soxl_trades': 0, 'soxs_trades': 0
+                'tqqq_trades': 0, 'sqqq_trades': 0
             }
         wins = sub_df[sub_df['net_ret_pct'] > 0]
         losses = sub_df[sub_df['net_ret_pct'] <= 0]
@@ -441,8 +441,8 @@ def step4_generate_tables(trades: List[Dict[str, Any]], initial_capital: float):
             'pnl': int(tot_pnl),
             'ret_pct': round(ret_pct, 1),
             'end_cap': int(end_cap),
-            'soxl_trades': len(sub_df[sub_df['symbol'] == 'SOXL']),
-            'soxs_trades': len(sub_df[sub_df['symbol'] == 'SOXS'])
+            'tqqq_trades': len(sub_df[sub_df['symbol'] == 'TQQQ']),
+            'sqqq_trades': len(sub_df[sub_df['symbol'] == 'SQQQ'])
         }
         
     is_stats = calc_stats(df_is, initial_capital)
@@ -466,8 +466,8 @@ def step4_generate_tables(trades: List[Dict[str, Any]], initial_capital: float):
             'trades': st['trades'],
             'win_rate': st['win_rate'],
             'pf': st['pf'],
-            'soxl_cnt': st['soxl_trades'],
-            'soxs_cnt': st['soxs_trades']
+            'tqqq_cnt': st['tqqq_trades'],
+            'sqqq_cnt': st['sqqq_trades']
         })
         y_start_cap = st['end_cap']
         
@@ -488,8 +488,8 @@ def step4_generate_tables(trades: List[Dict[str, Any]], initial_capital: float):
             'trades': st['trades'],
             'win_rate': st['win_rate'],
             'pf': st['pf'],
-            'soxl_cnt': st['soxl_trades'],
-            'soxs_cnt': st['soxs_trades']
+            'tqqq_cnt': st['tqqq_trades'],
+            'sqqq_cnt': st['sqqq_trades']
         })
         m_start_cap = st['end_cap']
         
@@ -514,7 +514,7 @@ def step4_generate_tables(trades: List[Dict[str, Any]], initial_capital: float):
     print(f"{'기말 잔고':<20} | {is_stats['end_cap']:,}원{'':<20} | {oos_stats['end_cap']:,}원{'':<20}")
     print(f"{'누적 손익':<20} | {is_stats['pnl']:+,}원{'':<19} | {oos_stats['pnl']:+,}원{'':<19}")
     print(f"{'수익률':<20} | {is_stats['ret_pct']:+.1f}%{'':<24} | {oos_stats['ret_pct']:+.1f}%{'':<24}")
-    print(f"{'총 거래 횟수':<20} | {is_stats['trades']}회 (SOXL:{is_stats['soxl_trades']}, SOXS:{is_stats['soxs_trades']}){'':<10} | {oos_stats['trades']}회 (SOXL:{oos_stats['soxl_trades']}, SOXS:{oos_stats['soxs_trades']}){'':<10}")
+    print(f"{'총 거래 횟수':<20} | {is_stats['trades']}회 (TQQQ:{is_stats['tqqq_trades']}, SQQQ:{is_stats['sqqq_trades']}){'':<10} | {oos_stats['trades']}회 (TQQQ:{oos_stats['tqqq_trades']}, SQQQ:{oos_stats['sqqq_trades']}){'':<10}")
     print(f"{'승률 (Win Rate)':<20} | {is_stats['win_rate']:.1f}%{'':<24} | {oos_stats['win_rate']:.1f}%{'':<24}")
     print(f"{'손익비 (Profit Factor)':<20} | {is_stats['pf']:.2f}{'':<26} | {oos_stats['pf']:.2f}{'':<26}")
     print("=" * 110)
@@ -522,19 +522,19 @@ def step4_generate_tables(trades: List[Dict[str, Any]], initial_capital: float):
     print("\n" + "=" * 110)
     print("📅 [2. 년도별 상세 결산 (시작원금: 10,000,000원)]")
     print("=" * 110)
-    print(f"{'년도':<6} | {'시작 잔고':<14} | {'기말 잔고':<14} | {'연간 손익':<14} | {'수익률':<9} | {'거래수':<6} | {'승률':<7} | {'PF':<6} | {'SOXL/SOXS':<10}")
+    print(f"{'년도':<6} | {'시작 잔고':<14} | {'기말 잔고':<14} | {'연간 손익':<14} | {'수익률':<9} | {'거래수':<6} | {'승률':<7} | {'PF':<6} | {'TQQQ/SQQQ':<10}")
     print("-" * 110)
     for r in yearly_rows:
-        print(f"{r['year']:<6} | {r['start_cap']:>12,}원 | {r['end_cap']:>12,}원 | {r['pnl']:>+12,}원 | {r['ret_pct']:>+7.1f}% | {r['trades']:>4}회 | {r['win_rate']:>5.1f}% | {r['pf']:>5.2f} | {r['soxl_cnt']:>2}/{r['soxs_cnt']:<2}회")
+        print(f"{r['year']:<6} | {r['start_cap']:>12,}원 | {r['end_cap']:>12,}원 | {r['pnl']:>+12,}원 | {r['ret_pct']:>+7.1f}% | {r['trades']:>4}회 | {r['win_rate']:>5.1f}% | {r['pf']:>5.2f} | {r['tqqq_cnt']:>2}/{r['sqqq_cnt']:<2}회")
     print("=" * 110)
 
     print("\n" + "=" * 110)
     print("🗓️ [3. 월별 상세 결산 (천만원 시작 복리 운용 잔고)]")
     print("=" * 110)
-    print(f"{'연월':<7} | {'시작 잔고':<14} | {'기말 잔고':<14} | {'월간 손익':<14} | {'수익률':<9} | {'거래수':<6} | {'승률':<7} | {'PF':<6} | {'SOXL/SOXS':<10}")
+    print(f"{'연월':<7} | {'시작 잔고':<14} | {'기말 잔고':<14} | {'월간 손익':<14} | {'수익률':<9} | {'거래수':<6} | {'승률':<7} | {'PF':<6} | {'TQQQ/SQQQ':<10}")
     print("-" * 110)
     for r in monthly_rows:
-        print(f"{r['month']:<7} | {r['start_cap']:>12,}원 | {r['end_cap']:>12,}원 | {r['pnl']:>+12,}원 | {r['ret_pct']:>+7.2f}% | {r['trades']:>4}회 | {r['win_rate']:>5.1f}% | {r['pf']:>5.2f} | {r['soxl_cnt']:>2}/{r['soxs_cnt']:<2}회")
+        print(f"{r['month']:<7} | {r['start_cap']:>12,}원 | {r['end_cap']:>12,}원 | {r['pnl']:>+12,}원 | {r['ret_pct']:>+7.2f}% | {r['trades']:>4}회 | {r['win_rate']:>5.1f}% | {r['pf']:>5.2f} | {r['tqqq_cnt']:>2}/{r['sqqq_cnt']:<2}회")
     print("=" * 110)
     
     # JSON 파일 저장

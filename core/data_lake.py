@@ -26,13 +26,13 @@ if sys.platform.startswith('win'):
 from config import DATA_DIR, BASE_DIR
 
 MARKET_DATA_DB = DATA_DIR / "market_data.db"
-ALL_SYMBOLS = ["SOXL", "SOXS", "SOXX", "QQQ", "NVDA", "^VIX", "^TNX"]
+ALL_SYMBOLS = ["SOXL", "SOXS", "TQQQ", "SQQQ", "SOXX", "QQQ", "NVDA", "^VIX", "^TNX"]
 TIMEFRAMES = ["15m", "60m", "5m"]
 
 class MarketDataLake:
     """
     [Lumos v5.0 확장 영구 분봉 시계열 데이터 레이크 (7종 심볼 확장)]
-    1. 거래 대상: SOXL, SOXS
+    1. 거래 대상: TQQQ, SQQQ
     2. 섹터/지수: SOXX (^SOX), QQQ (나스닥 100)
     3. 매크로/주도주: NVDA (반도체 선행 주도주), ^VIX (변동성), ^TNX (미 10년물 국채금리)
     - 타임프레임: 3m/5m, 15m, 60m OHLCV 원천 가격 영구 저장 (UPSERT)
@@ -292,7 +292,7 @@ class MarketDataLake:
         results = {}
         total_inserted = 0
 
-        print("⏳ [7종 심볼 콜드스타트 수집 시작] SOXL, SOXS, SOXX, QQQ, NVDA, VIXY, IEF...")
+        print("⏳ [7종 심볼 콜드스타트 수집 시작] TQQQ, SQQQ, SOXX, QQQ, NVDA, VIXY, IEF...")
         for sym in ALL_SYMBOLS:
             for tf in TIMEFRAMES:
                 try:
@@ -308,7 +308,7 @@ class MarketDataLake:
 
     def sync_live_intraday_candles(self, symbols: Optional[List[str]] = None) -> int:
         """장중 실시간 5분봉/15분봉 최신 데이터 동기화 (최근 1일치 고속 수집)"""
-        target_syms = symbols or ["SOXL", "SOXS", "NVDA", "QQQ", "SOXX", "^VIX"]
+        target_syms = symbols or ["SOXL", "SOXS", "TQQQ", "SQQQ", "NVDA", "QQQ", "SOXX", "^VIX"]
         total_added = 0
         for sym in target_syms:
             for tf in ["5m", "15m", "60m"]:
@@ -436,14 +436,14 @@ class DailyAutoPipeline:
         import joblib
 
         # 최근 504 거래일 고정 롤링 윈도우 추출 (Concept Drift 방지 및 꼬리 절삭)
-        soxl_15m = self.data_lake.load_rolling_candles("SOXL", "15m", max_trading_days=504)
-        if len(soxl_15m) < 100:
+        tqqq_15m = self.data_lake.load_rolling_candles("TQQQ", "15m", max_trading_days=504)
+        if len(tqqq_15m) < 100:
             return {"ok": False, "msg": "데이터 부족으로 재학습 취소"}
 
         # 1. Track 1: LightGBM 최신화 롤링 재학습
         ml_engine = MLFeatureEngine(confidence_threshold=0.40)
-        soxl_feat = ml_engine.extract_features(soxl_15m)
-        trained_model, top_10, _ = ml_engine.train_and_select_top_features(soxl_feat)
+        tqqq_feat = ml_engine.extract_features(tqqq_15m)
+        trained_model, top_10, _ = ml_engine.train_and_select_top_features(tqqq_feat)
 
         refresh_path = BASE_DIR / "models" / "model_main_data_refresh.pkl"
         joblib.dump(trained_model, refresh_path)
@@ -476,13 +476,13 @@ class DailyAutoPipeline:
         import joblib
 
         # 최근 504 거래일 고정 롤링 윈도우 추출 (Concept Drift 방지 및 꼬리 절삭)
-        soxl_15m = self.data_lake.load_rolling_candles("SOXL", "15m", max_trading_days=504)
-        if len(soxl_15m) < 100:
+        tqqq_15m = self.data_lake.load_rolling_candles("TQQQ", "15m", max_trading_days=504)
+        if len(tqqq_15m) < 100:
             return {"ok": False, "msg": "데이터 부족으로 재학습 취소"}
 
         ml_engine = MLFeatureEngine(confidence_threshold=0.40)
-        soxl_feat = ml_engine.extract_features(soxl_15m)
-        trained_model, top_10, _ = ml_engine.train_and_select_top_features(soxl_feat)
+        tqqq_feat = ml_engine.extract_features(tqqq_15m)
+        trained_model, top_10, _ = ml_engine.train_and_select_top_features(tqqq_feat)
 
         refresh_path = BASE_DIR / "models" / "model_main_data_refresh.pkl"
         joblib.dump(trained_model, refresh_path)
@@ -506,8 +506,8 @@ class DailyAutoPipeline:
             "ok": True,
             "model_id": "M-DATA-REFRESH",
             "file_path": str(refresh_path),
-            "trading_days_used": len(soxl_15m.index.strftime('%Y-%m-%d').unique()),
-            "total_bars": len(soxl_15m),
+            "trading_days_used": len(tqqq_15m.index.strftime('%Y-%m-%d').unique()),
+            "total_bars": len(tqqq_15m),
             "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
@@ -557,7 +557,7 @@ class DailyAutoPipeline:
             pnl_sign = "+" if realized_pnl >= 0 else ""
             pnl_krw_sign = "+" if tdy_pl_krw >= 0 else ""
             exec_lines = [
-                f"  • **[원장 실체결 완료]** `SOXS 등 당일 포지션 진입 및 100% 전량 청산 완료`",
+                f"  • **[원장 실체결 완료]** `SQQQ 등 당일 포지션 진입 및 100% 전량 청산 완료`",
                 f"  • **당일 매수 약정금액:** `${tdy_book_usd:,.2f} USD` (`₩{tdy_book_krw:,}원`)",
                 f"  • **당일 확정 실현손익:** `{pnl_sign}${realized_pnl:.2f} USD` (`{pnl_krw_sign}₩{tdy_pl_krw:,}원` / `{pnl_sign}{realized_rate:.2f}%`)"
             ]
@@ -593,7 +593,7 @@ class DailyAutoPipeline:
 💱 **적용 환율:** `{exrt:,.2f} KRW/USD`
 
 📦 **[1. 일일 시장 데이터 백업 완료]**
-• **대상 심볼:** `SOXL, SOXS, NVDA, QQQ, SOXX, VIXY, IEF (7종)`
+• **대상 심볼:** `SOXL, SOXS, NVDA, QQQ, SOXX, VIXY, IEF, TQQQ, SQQQ (9종)`
 • **적재 타임프레임:** `5분봉 / 15분봉 / 60분봉 전수 DB 백업 완료`
 
 {retrain_text}

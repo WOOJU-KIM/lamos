@@ -27,30 +27,30 @@ class StrategyAgent:
 - 로직 버전: {active_logic.get('version', 'v1.0')} ({active_logic.get('name')})
 - 기본 선제 진입선: {active_logic.get('dip_buy_pct', -1.0):+.2f}%
 - 엄격 손절선: {active_logic.get('stop_loss_pct', -2.0):+.2f}%
-- SOXS 헷지 스위칭선: {active_logic.get('hedge_switch_pct', -1.5):+.2f}%
+- SQQQ 헷지 스위칭선: {active_logic.get('hedge_switch_pct', -1.5):+.2f}%
 - 목표 익절선: +{active_logic.get('take_profit_pct', 4.5):.2f}%
 
 [현재 시장 국면 (Market Regime)]
 - 국면명: {regime_name} (모드: {regime_mode})
-- SOXL 가중치 배수: {regime_params.get('soxl_weight_mult', 1.0)}x
-- SOXS 가중치 배수: {regime_params.get('soxs_weight_mult', 0.5)}x
+- TQQQ 가중치 배수: {regime_params.get('tqqq_weight_mult', 1.0)}x
+- SQQQ 가중치 배수: {regime_params.get('sqqq_weight_mult', 0.5)}x
 - 국면 권장 선제 진입: {regime_params.get('dip_buy_threshold_pct', -1.0):+.2f}%
 - 국면 권장 손절선: {regime_params.get('stop_loss_pct', -2.0):+.2f}%
 - 국면 권장 헷지 스위칭: {regime_params.get('hedge_switch_threshold_pct', -1.5):+.2f}%
 
 [3대 매매 원칙]
-1. SOXL 분할 매수 / 선제 매수 (Dip Buy):
+1. TQQQ 분할 매수 / 선제 매수 (Dip Buy):
    - 현재 국면과 활성 로직의 선제 진입 기준에 부합할 때 분할 매수로 진입.
 2. 칼손절 (Strict Stop-Loss):
    - 손절선 이탈 시 원금 보존을 위해 즉시 손절 지시.
-3. SOXS 헤지 스위칭 (Hedge Switching):
-   - 하락 추세 전환 또는 손절선 이탈 시 SOXS(인버스 3배)로 즉시 스위칭.
+3. SQQQ 헤지 스위칭 (Hedge Switching):
+   - 하락 추세 전환 또는 손절선 이탈 시 SQQQ(인버스 3배)로 즉시 스위칭.
 
 반드시 다음 JSON 형식으로만 응답하세요:
 ```json
 {{
-  "action": "BUY_SOXL_DIP" | "STOP_LOSS_SOXL" | "SWITCH_SOXS_HEDGE" | "HOLD_SOXL" | "HOLD_SOXS" | "WAIT_CASH",
-  "target_asset": "SOXL" | "SOXS" | "CASH",
+  "action": "BUY_TQQQ_DIP" | "STOP_LOSS_TQQQ" | "SWITCH_SQQQ_HEDGE" | "HOLD_TQQQ" | "HOLD_SQQQ" | "WAIT_CASH",
+  "target_asset": "TQQQ" | "SQQQ" | "CASH",
   "confidence_score": 1~100 (정수),
   "rationale": "국면 및 활성 로직 파라미터 기반 분석 근거 (3~4문장)",
   "entry_target_price": "진입 권장 가격대 (예: $142.00 ~ $142.80)",
@@ -87,8 +87,8 @@ JSON 형식으로 정밀하게 전략을 수립하세요."""
                 parsed = json.loads(response_text)
         except Exception:
             parsed = {
-                "action": "BUY_SOXL_DIP",
-                "target_asset": "SOXL",
+                "action": "BUY_TQQQ_DIP",
+                "target_asset": "TQQQ",
                 "confidence_score": 85,
                 "rationale": "국면 지표 및 활성 로직 파라미터 기준 눌림목 분할 진입 유효.",
                 "entry_target_price": "장중 현재가 분할 진입",

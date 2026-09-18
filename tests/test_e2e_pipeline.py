@@ -82,7 +82,7 @@ def run_e2e_test():
         print(f"     • 시작원금: {res['initial_capital_krw']:,}원 ➔ 최종잔고: {final_cap:,}원")
         print(f"     • 수익률: {ret:+.2f}% ({res['total_pnl_krw']:+,}원)")
         print(f"     • 총 거래: {trades}회 ({res['total_wins']}승 {res['total_losses']}패, 승률 {win_rate}%)")
-        print(f"     • SOXL 승률: {res['soxl_win_rate_pct']}% | SOXS 승률: {res['soxs_win_rate_pct']}%")
+        print(f"     • TQQQ 승률: {res['tqqq_win_rate_pct']}% | SQQQ 승률: {res['sqqq_win_rate_pct']}%")
         print(f"     • 손익비(PF): {pf} | MDD: -{mdd:.2f}%")
 
         if trades == 20 and ret == 24.38 and win_rate == 65.0 and final_cap == 12_438_395:

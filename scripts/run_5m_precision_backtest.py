@@ -54,8 +54,8 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
 
     # 1. 15m 및 5m 데이터 로드
     print("⏳ [1/4] 데이터 레이크에서 15m 및 5m 캔들 로드 중...")
-    soxl_15m = lake.load_candles("SOXL", "15m")
-    soxs_15m = lake.load_candles("SOXS", "15m")
+    tqqq_15m = lake.load_candles("TQQQ", "15m")
+    sqqq_15m = lake.load_candles("SQQQ", "15m")
     soxx_60m = lake.load_candles("SOXX", "60m")
     nvda_15m = lake.load_candles("NVDA", "15m")
     soxx_15m = lake.load_candles("SOXX", "15m")
@@ -64,41 +64,41 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
     ief_15m  = lake.load_candles("IEF", "15m")
 
     # 5분봉 로드
-    soxl_5m = lake.load_candles("SOXL", "5m")
-    soxs_5m = lake.load_candles("SOXS", "5m")
+    tqqq_5m = lake.load_candles("TQQQ", "5m")
+    sqqq_5m = lake.load_candles("SQQQ", "5m")
 
-    print(f"   📊 15분봉: SOXL {len(soxl_15m):,}개 | SOXS {len(soxs_15m):,}개")
-    print(f"   📊 5분봉:  SOXL {len(soxl_5m):,}개 | SOXS {len(soxs_5m):,}개")
+    print(f"   📊 15분봉: TQQQ {len(tqqq_15m):,}개 | SQQQ {len(sqqq_15m):,}개")
+    print(f"   📊 5분봉:  TQQQ {len(tqqq_5m):,}개 | SQQQ {len(sqqq_5m):,}개")
 
     # 60m 20EMA
     soxx_60m['ema20'] = soxx_60m['Close'].ewm(span=20, adjust=False).mean()
 
     # 5분봉 인덱스 맵 (고속 슬라이싱용)
-    soxl_5m_by_date = {}
-    for d, g in soxl_5m.groupby(soxl_5m['datetime'].str.slice(0, 10)):
-        soxl_5m_by_date[d] = g.sort_values('datetime').reset_index(drop=True)
+    tqqq_5m_by_date = {}
+    for d, g in tqqq_5m.groupby(tqqq_5m['datetime'].str.slice(0, 10)):
+        tqqq_5m_by_date[d] = g.sort_values('datetime').reset_index(drop=True)
 
-    soxs_5m_by_date = {}
-    for d, g in soxs_5m.groupby(soxs_5m['datetime'].str.slice(0, 10)):
-        soxs_5m_by_date[d] = g.sort_values('datetime').reset_index(drop=True)
+    sqqq_5m_by_date = {}
+    for d, g in sqqq_5m.groupby(sqqq_5m['datetime'].str.slice(0, 10)):
+        sqqq_5m_by_date[d] = g.sort_values('datetime').reset_index(drop=True)
 
     # 2. 피처 추출 및 모델 준비
     print("⏳ [2/4] 머신러닝 피처 및 모델 준비 중...")
     ml_engine = MLFeatureEngine(confidence_threshold=0.60)
-    soxl_feat = ml_engine.extract_features(soxl_15m)
-    labels = ml_engine.compute_triple_barrier_labels(soxl_feat)
+    tqqq_feat = ml_engine.extract_features(tqqq_15m)
+    labels = ml_engine.compute_triple_barrier_labels(tqqq_feat)
     target_series = labels.map({1: 2, -1: 0, 0: 1}).fillna(1).astype(int)
-    soxl_feat['target'] = target_series
+    tqqq_feat['target'] = target_series
 
-    soxl_feat['datetime_dt'] = pd.to_datetime(soxl_feat['datetime'])
-    soxl_feat['date_str'] = soxl_feat['datetime_dt'].dt.strftime('%Y-%m-%d')
-    soxl_feat['time_str'] = soxl_feat['datetime_dt'].dt.strftime('%H:%M')
+    tqqq_feat['datetime_dt'] = pd.to_datetime(tqqq_feat['datetime'])
+    tqqq_feat['date_str'] = tqqq_feat['datetime_dt'].dt.strftime('%Y-%m-%d')
+    tqqq_feat['time_str'] = tqqq_feat['datetime_dt'].dt.strftime('%H:%M')
 
     # 무차원화 정규화 피처 추가 (주가 스케일 변화 방어)
-    soxl_feat['ATR_Pct'] = (soxl_feat['ATR_14'] / (soxl_feat['Close'] + 1e-9)) * 100.0
-    soxl_feat['MACD_Pct'] = (soxl_feat['MACD'] / (soxl_feat['Close'] + 1e-9)) * 100.0
-    soxl_feat['MACD_Signal_Pct'] = (soxl_feat['MACD_Signal'] / (soxl_feat['Close'] + 1e-9)) * 100.0
-    soxl_feat['MACD_Hist_Pct'] = (soxl_feat['MACD_Hist'] / (soxl_feat['Close'] + 1e-9)) * 100.0
+    tqqq_feat['ATR_Pct'] = (tqqq_feat['ATR_14'] / (tqqq_feat['Close'] + 1e-9)) * 100.0
+    tqqq_feat['MACD_Pct'] = (tqqq_feat['MACD'] / (tqqq_feat['Close'] + 1e-9)) * 100.0
+    tqqq_feat['MACD_Signal_Pct'] = (tqqq_feat['MACD_Signal'] / (tqqq_feat['Close'] + 1e-9)) * 100.0
+    tqqq_feat['MACD_Hist_Pct'] = (tqqq_feat['MACD_Hist'] / (tqqq_feat['Close'] + 1e-9)) * 100.0
 
     raw_price_features = {
         'open', 'high', 'low', 'close', 'volume', 'Open', 'High', 'Low', 'Close', 'Volume',
@@ -106,7 +106,7 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
         'cum_vp', 'vwap', 'EMA_9', 'EMA_21', 'EMA_50', 'EMA_200',
         'BB_Upper', 'BB_Lower', 'KC_Upper', 'KC_Lower', 'ATR_14', 'MACD', 'MACD_Signal', 'MACD_Hist'
     }
-    feature_cols = [c for c in soxl_feat.columns if c not in raw_price_features and pd.api.types.is_numeric_dtype(soxl_feat[c])]
+    feature_cols = [c for c in tqqq_feat.columns if c not in raw_price_features and pd.api.types.is_numeric_dtype(tqqq_feat[c])]
 
     # 크로스에셋 딕셔너리
     nvda_map = nvda_15m.set_index('datetime')['Close'].to_dict()
@@ -114,17 +114,17 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
     qqq_map  = qqq_15m.set_index('datetime')['Close'].to_dict()
     vix_map  = vixy_15m.set_index('datetime')['Close'].to_dict()
     ief_map  = ief_15m.set_index('datetime')['Close'].to_dict()
-    soxs_dict = soxs_15m.set_index('datetime').to_dict(orient='index')
+    sqqq_dict = sqqq_15m.set_index('datetime').to_dict(orient='index')
 
     cross_mod = CrossAssetDislocationModel(dislocation_z_threshold=1.6)
 
-    soxl_feat['week_id'] = soxl_feat['datetime_dt'].dt.isocalendar().year.astype(str) + '-' + soxl_feat['datetime_dt'].dt.isocalendar().week.astype(str).str.zfill(2)
-    unique_weeks = sorted(soxl_feat['week_id'].unique())
+    tqqq_feat['week_id'] = tqqq_feat['datetime_dt'].dt.isocalendar().year.astype(str) + '-' + tqqq_feat['datetime_dt'].dt.isocalendar().week.astype(str).str.zfill(2)
+    unique_weeks = sorted(tqqq_feat['week_id'].unique())
     ROLLING_WINDOW_WEEKS = 104
 
     if model_train_mode == "22_24":
         # 22~24 모델 사전 학습 (2022-09-15 ~ 2024-09-14)
-        train_mask_22_24 = (soxl_feat['date_str'] >= '2022-09-15') & (soxl_feat['date_str'] <= '2024-09-14')
+        train_mask_22_24 = (tqqq_feat['date_str'] >= '2022-09-15') & (tqqq_feat['date_str'] <= '2024-09-14')
         clf_22_24 = LGBMClassifier(
             objective='multiclass',
             num_class=3,
@@ -136,11 +136,11 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
             verbosity=-1,
             n_jobs=-1
         )
-        clf_22_24.fit(soxl_feat.loc[train_mask_22_24, feature_cols].fillna(0.0), soxl_feat.loc[train_mask_22_24, 'target'])
+        clf_22_24.fit(tqqq_feat.loc[train_mask_22_24, feature_cols].fillna(0.0), tqqq_feat.loc[train_mask_22_24, 'target'])
         print("   🧠 [2022~2024 고정 모델 학습 완료]")
 
-        test_mask = soxl_feat['date_str'] >= '2022-09-15'
-        test_df = soxl_feat[test_mask].copy()
+        test_mask = tqqq_feat['date_str'] >= '2022-09-15'
+        test_df = tqqq_feat[test_mask].copy()
 
         X_all = test_df[feature_cols].fillna(0.0)
         probs = clf_22_24.predict_proba(X_all)
@@ -155,11 +155,11 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
             if pl > pn and pl > ps:
                 calib_conf = min(0.95, max(0.50, 0.50 + (pl - 0.333) * 1.15))
                 confidences[i] = calib_conf
-                directions[i] = "LONG_SOXL"
+                directions[i] = "LONG_TQQQ"
             elif ps > pn and ps > pl:
                 calib_conf = min(0.95, max(0.50, 0.50 + (ps - 0.333) * 1.15))
                 confidences[i] = calib_conf
-                directions[i] = "SHORT_SOXS"
+                directions[i] = "SHORT_SQQQ"
 
         test_df['Confidence'] = confidences
         test_df['Direction'] = directions
@@ -170,9 +170,9 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
         for w_idx in range(ROLLING_WINDOW_WEEKS, len(unique_weeks)):
             cur_test_week = unique_weeks[w_idx]
             train_weeks = unique_weeks[w_idx - ROLLING_WINDOW_WEEKS : w_idx]
-            train_mask = soxl_feat['week_id'].isin(train_weeks)
-            X_tr = soxl_feat.loc[train_mask, feature_cols].fillna(0.0)
-            y_tr = soxl_feat.loc[train_mask, 'target']
+            train_mask = tqqq_feat['week_id'].isin(train_weeks)
+            X_tr = tqqq_feat.loc[train_mask, feature_cols].fillna(0.0)
+            y_tr = tqqq_feat.loc[train_mask, 'target']
 
             clf = LGBMClassifier(
                 objective='multiclass',
@@ -187,8 +187,8 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
             )
             clf.fit(X_tr, y_tr)
 
-            cur_w_mask = soxl_feat['week_id'] == cur_test_week
-            w_test_df = soxl_feat[cur_w_mask].copy()
+            cur_w_mask = tqqq_feat['week_id'] == cur_test_week
+            w_test_df = tqqq_feat[cur_w_mask].copy()
             if w_test_df.empty:
                 continue
 
@@ -204,10 +204,10 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
                 ps, pn, pl = p_s[i], p_n[i], p_l[i]
                 if pl > pn and pl > ps:
                     w_confs[i] = min(0.95, max(0.50, 0.50 + (pl - 0.333) * 1.15))
-                    w_dirs[i] = "LONG_SOXL"
+                    w_dirs[i] = "LONG_TQQQ"
                 elif ps > pn and ps > pl:
                     w_confs[i] = min(0.95, max(0.50, 0.50 + (ps - 0.333) * 1.15))
-                    w_dirs[i] = "SHORT_SOXS"
+                    w_dirs[i] = "SHORT_SQQQ"
 
             w_test_df['Confidence'] = w_confs
             w_test_df['Direction'] = w_dirs
@@ -232,8 +232,8 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
 
     for d_str in unique_dates:
         day_bars_15 = test_df[test_df['date_str'] == d_str].reset_index(drop=True)
-        day_soxl_5 = soxl_5m_by_date.get(d_str, pd.DataFrame())
-        day_soxs_5 = soxs_5m_by_date.get(d_str, pd.DataFrame())
+        day_tqqq_5 = tqqq_5m_by_date.get(d_str, pd.DataFrame())
+        day_sqqq_5 = sqqq_5m_by_date.get(d_str, pd.DataFrame())
 
         daily_stoploss_count = 0
         b_idx = 0
@@ -243,10 +243,10 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
             row = day_bars_15.iloc[b_idx]
             curr_dt = row['datetime']
             time_str = row['time_str']
-            cur_soxl_close = float(row['Close'])
+            cur_tqqq_close = float(row['Close'])
 
-            soxs_row = soxs_dict.get(curr_dt)
-            cur_soxs_close = float(soxs_row['Close']) if soxs_row else 0.0
+            sqqq_row = sqqq_dict.get(curr_dt)
+            cur_sqqq_close = float(sqqq_row['Close']) if sqqq_row else 0.0
 
             # Rule 5: 일일 서킷 브레이커 (3-Out 시 당일 추가 진입 전면 차단)
             if daily_stoploss_count >= 3:
@@ -293,9 +293,9 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
                 ief_r  = (i_px / p_i - 1.0) if (i_px and p_i) else 0.0
                 tnx_proxy_ret = -ief_r
 
-                soxl_r = (cur_soxl_close / day_bars_15.iloc[b_idx - 5]['Close']) - 1.0
+                tqqq_r = (cur_tqqq_close / day_bars_15.iloc[b_idx - 5]['Close']) - 1.0
                 sig_code, _, _ = cross_mod.predict_signal(
-                    soxl_ret=soxl_r,
+                    tqqq_ret=tqqq_r,
                     nvda_ret=nvda_r,
                     soxx_ret=soxx_r,
                     qqq_ret=qqq_r,
@@ -303,27 +303,27 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
                     tnx_ret=tnx_proxy_ret
                 )
                 if sig_code > 0:
-                    cross_dir = "LONG_SOXL"
+                    cross_dir = "LONG_TQQQ"
                 elif sig_code < 0:
-                    cross_dir = "SHORT_SOXS"
+                    cross_dir = "SHORT_SQQQ"
 
             # 진입 조건 검사
             entry_approved = False
             target_sym = None
             entry_price = 0.0
 
-            if dir_gbdt == "LONG_SOXL" and conf_gbdt >= 0.60 and soxx_60m_bull and cross_dir != "SHORT_SOXS":
+            if dir_gbdt == "LONG_TQQQ" and conf_gbdt >= 0.60 and soxx_60m_bull and cross_dir != "SHORT_SQQQ":
                 entry_approved = True
-                target_sym = "SOXL"
-                entry_price = cur_soxl_close
-            elif dir_gbdt == "SHORT_SOXS" and conf_gbdt >= 0.60 and soxx_60m_bear and cross_dir != "LONG_SOXL":
+                target_sym = "TQQQ"
+                entry_price = cur_tqqq_close
+            elif dir_gbdt == "SHORT_SQQQ" and conf_gbdt >= 0.60 and soxx_60m_bear and cross_dir != "LONG_TQQQ":
                 entry_approved = True
-                target_sym = "SOXS"
-                entry_price = cur_soxs_close
+                target_sym = "SQQQ"
+                entry_price = cur_sqqq_close
 
             if entry_approved and entry_price > 0:
                 # 5분봉 정밀 궤적 추적 시작 (post 5m candles)
-                target_5m = day_soxl_5 if target_sym == "SOXL" else day_soxs_5
+                target_5m = day_tqqq_5 if target_sym == "TQQQ" else day_sqqq_5
                 post_5m = target_5m[target_5m['datetime'] > curr_dt].reset_index(drop=True)
 
                 tp_px = entry_price * 1.030
@@ -486,7 +486,7 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
     print("\n" + "=" * 115)
     print("📅 [2. 년도별 상세 결산 (천만 원 시작 5분봉 정밀 복리 잔고 추이)]")
     print("=" * 115)
-    print(f"{'년도':<6} | {'시작 잔고':>18} | {'기말 잔고':>18} | {'연간 손익':>18} | {'수익률':>10} | {'거래수':>6} | {'승률':>8} | {'PF':>6} | {'SOXL/SOXS'}")
+    print(f"{'년도':<6} | {'시작 잔고':>18} | {'기말 잔고':>18} | {'연간 손익':>18} | {'수익률':>10} | {'거래수':>6} | {'승률':>8} | {'PF':>6} | {'TQQQ/SQQQ'}")
     print("-" * 115)
 
     yearly_summary = []
@@ -502,14 +502,14 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
         gross_w = g[g['net_ret_pct'] > 0]['net_ret_pct'].sum()
         gross_l = abs(g[g['net_ret_pct'] <= 0]['net_ret_pct'].sum())
         y_pf = (gross_w / gross_l) if gross_l > 0 else 99.0
-        soxl_c = len(g[g['symbol'] == 'SOXL'])
-        soxs_c = len(g[g['symbol'] == 'SOXS'])
+        tqqq_c = len(g[g['symbol'] == 'TQQQ'])
+        sqqq_c = len(g[g['symbol'] == 'SQQQ'])
 
-        print(f"{y:<6} | {int(y_start_cap):>16,}원 | {int(y_end_cap):>16,}원 | {int(y_pnl):>+16,}원 | {y_ret:>+9.1f}% | {y_trades:>5}회 | {y_wr:>7.1f}% | {y_pf:>6.2f} | {soxl_c:>3}/{soxs_c:<3}회")
+        print(f"{y:<6} | {int(y_start_cap):>16,}원 | {int(y_end_cap):>16,}원 | {int(y_pnl):>+16,}원 | {y_ret:>+9.1f}% | {y_trades:>5}회 | {y_wr:>7.1f}% | {y_pf:>6.2f} | {tqqq_c:>3}/{sqqq_c:<3}회")
         yearly_summary.append({
             "year": y, "start_cap": int(y_start_cap), "end_cap": int(y_end_cap),
             "pnl": int(y_pnl), "ret_pct": round(y_ret, 1), "trades": y_trades,
-            "win_rate": round(y_wr, 1), "pf": round(y_pf, 2), "soxl_cnt": soxl_c, "soxs_cnt": soxs_c
+            "win_rate": round(y_wr, 1), "pf": round(y_pf, 2), "tqqq_cnt": tqqq_c, "sqqq_cnt": sqqq_c
         })
         y_start_cap = y_end_cap
 
@@ -517,7 +517,7 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
     print("\n" + "=" * 115)
     print("🗓️ [3. 월별 상세 결산 (천만 원 시작 5분봉 정밀 복리 잔고 추이, 49개월)]")
     print("=" * 115)
-    print(f"{'연월':<7} | {'시작 잔고':>18} | {'기말 잔고':>18} | {'월간 손익':>18} | {'수익률':>10} | {'거래수':>6} | {'승률':>8} | {'PF':>6} | {'SOXL/SOXS'}")
+    print(f"{'연월':<7} | {'시작 잔고':>18} | {'기말 잔고':>18} | {'월간 손익':>18} | {'수익률':>10} | {'거래수':>6} | {'승률':>8} | {'PF':>6} | {'TQQQ/SQQQ'}")
     print("-" * 115)
 
     monthly_summary = []
@@ -533,14 +533,14 @@ def run_5m_precision_backtest(model_train_mode: str = "22_24"):
         gross_w = g[g['net_ret_pct'] > 0]['net_ret_pct'].sum()
         gross_l = abs(g[g['net_ret_pct'] <= 0]['net_ret_pct'].sum())
         m_pf = (gross_w / gross_l) if gross_l > 0 else 99.0
-        soxl_c = len(g[g['symbol'] == 'SOXL'])
-        soxs_c = len(g[g['symbol'] == 'SOXS'])
+        tqqq_c = len(g[g['symbol'] == 'TQQQ'])
+        sqqq_c = len(g[g['symbol'] == 'SQQQ'])
 
-        print(f"{m:<7} | {int(m_start_cap):>16,}원 | {int(m_end_cap):>16,}원 | {int(m_pnl):>+16,}원 | {m_ret:>+9.2f}% | {m_trades:>5}회 | {m_wr:>7.1f}% | {m_pf:>6.2f} | {soxl_c:>3}/{soxs_c:<3}회")
+        print(f"{m:<7} | {int(m_start_cap):>16,}원 | {int(m_end_cap):>16,}원 | {int(m_pnl):>+16,}원 | {m_ret:>+9.2f}% | {m_trades:>5}회 | {m_wr:>7.1f}% | {m_pf:>6.2f} | {tqqq_c:>3}/{sqqq_c:<3}회")
         monthly_summary.append({
             "month": m, "start_cap": int(m_start_cap), "end_cap": int(m_end_cap),
             "pnl": int(m_pnl), "ret_pct": round(m_ret, 2), "trades": m_trades,
-            "win_rate": round(m_wr, 1), "pf": round(m_pf, 2), "soxl_cnt": soxl_c, "soxs_cnt": soxs_c
+            "win_rate": round(m_wr, 1), "pf": round(m_pf, 2), "tqqq_cnt": tqqq_c, "sqqq_cnt": sqqq_c
         })
         m_start_cap = m_end_cap
 

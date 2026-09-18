@@ -80,7 +80,7 @@ class PowerHourSniper:
     def train_and_save(self, df_5m: Optional[pd.DataFrame] = None) -> LGBMClassifier:
         """5분봉 데이터로 Triple Barrier (+2.5% / -1.67% / 30m) 라벨링 후 모델 학습 및 저장"""
         if df_5m is None:
-            df_5m = self.data_lake.load_candles("SOXL", "5m")
+            df_5m = self.data_lake.load_candles("TQQQ", "5m")
 
         df_5m = df_5m.copy()
         if 'datetime' in df_5m.columns:
@@ -208,13 +208,13 @@ class PowerHourSniper:
         direction = "NONE"
         confidence = p_flat
         if p_long >= p_short and p_long >= p_flat:
-            direction = "LONG_SOXL"
+            direction = "LONG_TQQQ"
             confidence = p_long
         elif p_short >= p_long and p_short >= p_flat:
-            direction = "SHORT_SOXS"
+            direction = "SHORT_SQQQ"
             confidence = p_short
 
-        is_gbdt_trigger = (direction in ["LONG_SOXL", "SHORT_SOXS"]) and (confidence >= T)
+        is_gbdt_trigger = (direction in ["LONG_TQQQ", "SHORT_SQQQ"]) and (confidence >= T)
 
         # 🛡️ Cross-Asset Veto 방패 검증 (선행 매크로 상충 역풍 차단)
         is_cross_veto = False
@@ -243,10 +243,10 @@ class PowerHourSniper:
                 qqq_r = float(q_c.iloc[-1] / q_c.iloc[-5] - 1.0)
                 vix_r = float(v_c.iloc[-1] / v_c.iloc[-5] - 1.0)
                 soxx_r = float(soxx_c.iloc[-1] / soxx_c.iloc[-5] - 1.0) if not soxx_5m.empty else nvda_r
-                soxl_r = float(s_c.iloc[-1] / s_c.iloc[-5] - 1.0)
+                tqqq_r = float(s_c.iloc[-1] / s_c.iloc[-5] - 1.0)
 
                 sig_code, exp_conf, _ = self.cross_asset_model.predict_signal(
-                    soxl_ret=soxl_r,
+                    tqqq_ret=tqqq_r,
                     nvda_ret=nvda_r,
                     soxx_ret=soxx_r,
                     qqq_ret=qqq_r,
@@ -255,13 +255,13 @@ class PowerHourSniper:
                 )
                 conf_cross = exp_conf
                 if sig_code > 0:
-                    dir_cross = "LONG_SOXL"
+                    dir_cross = "LONG_TQQQ"
                 elif sig_code < 0:
-                    dir_cross = "SHORT_SOXS"
+                    dir_cross = "SHORT_SQQQ"
 
                 is_cross_veto = (
-                    (direction == "LONG_SOXL" and dir_cross == "SHORT_SOXS") or
-                    (direction == "SHORT_SOXS" and dir_cross == "LONG_SOXL")
+                    (direction == "LONG_TQQQ" and dir_cross == "SHORT_SQQQ") or
+                    (direction == "SHORT_SQQQ" and dir_cross == "LONG_TQQQ")
                 )
         except Exception:
             pass
@@ -274,9 +274,9 @@ class PowerHourSniper:
                 s_c = soxx_60m['Close'] if 'Close' in soxx_60m else soxx_60m['close']
                 soxx_c = s_c.iloc[-1]
                 soxx_ema = s_c.ewm(span=20, adjust=False).mean().iloc[-1]
-                if direction == "LONG_SOXL":
+                if direction == "LONG_TQQQ":
                     is_60m_trend_ok = (soxx_c >= soxx_ema * 0.998)
-                elif direction == "SHORT_SOXS":
+                elif direction == "SHORT_SQQQ":
                     is_60m_trend_ok = (soxx_c <= soxx_ema * 1.002)
         except Exception:
             pass
@@ -284,9 +284,9 @@ class PowerHourSniper:
         # Screen 3: 단기 5분봉 과열 필터
         rsi_5m = float(last_row.get("RSI_14", 50.0))
         is_dip_ok = True
-        if direction == "LONG_SOXL" and rsi_5m > 68.0:
+        if direction == "LONG_TQQQ" and rsi_5m > 68.0:
             is_dip_ok = False
-        elif direction == "SHORT_SOXS" and rsi_5m < 32.0:
+        elif direction == "SHORT_SQQQ" and rsi_5m < 32.0:
             is_dip_ok = False
 
         is_approved = bool(is_gbdt_trigger and (not is_cross_veto) and is_60m_trend_ok and is_dip_ok)

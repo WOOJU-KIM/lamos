@@ -33,19 +33,19 @@ def run_chronological_5m_backtest():
     lake = MarketDataLake()
     print("⏳ [1/4] 데이터 레이크에서 다중 타임프레임 캔들 로드 중...")
 
-    soxl_15m = lake.load_candles("SOXL", "15m")
-    soxs_15m = lake.load_candles("SOXS", "15m")
-    soxl_5m  = lake.load_candles("SOXL", "5m")
-    soxs_5m  = lake.load_candles("SOXS", "5m")
+    tqqq_15m = lake.load_candles("TQQQ", "15m")
+    sqqq_15m = lake.load_candles("SQQQ", "15m")
+    tqqq_5m  = lake.load_candles("TQQQ", "5m")
+    sqqq_5m  = lake.load_candles("SQQQ", "5m")
     soxx_60m = lake.load_candles("SOXX", "60m")
-    soxl_60m = lake.load_candles("SOXL", "60m")
+    tqqq_60m = lake.load_candles("TQQQ", "60m")
     nvda_15m = lake.load_candles("NVDA", "15m")
     qqq_15m  = lake.load_candles("QQQ", "15m")
     vix_15m  = lake.load_candles("^VIX", "15m")
     soxx_15m = lake.load_candles("SOXX", "15m")
 
     # Datetime 정규화
-    for df in [soxl_15m, soxs_15m, soxl_5m, soxs_5m, soxx_60m, soxl_60m, soxx_15m, nvda_15m, qqq_15m, vix_15m]:
+    for df in [tqqq_15m, sqqq_15m, tqqq_5m, sqqq_5m, soxx_60m, tqqq_60m, soxx_15m, nvda_15m, qqq_15m, vix_15m]:
         if 'datetime' in df.columns:
             df['datetime_dt'] = pd.to_datetime(df['datetime'])
             df['date_str'] = df['datetime_dt'].dt.strftime('%Y-%m-%d')
@@ -57,17 +57,17 @@ def run_chronological_5m_backtest():
 
     # Screen 1용 60m EMA20
     soxx_60m['ema20'] = soxx_60m['Close'].ewm(span=20, adjust=False).mean()
-    soxl_60m['ema20'] = soxl_60m['Close'].ewm(span=20, adjust=False).mean()
+    tqqq_60m['ema20'] = tqqq_60m['Close'].ewm(span=20, adjust=False).mean()
 
     # 2. MoE 모델 및 피처 엔지니어링
     print("⏳ [2/4] GBDT 3-Class 및 크로스에셋(Cross-Asset) 인과 괴리 사전 피처 추출 중...")
     moe = MoEMetaOrchestrator(confidence_threshold=0.60, gbdt_threshold=0.60, mode="hybrid_v3")
 
-    soxl_15m_feat = moe.gbdt_engine.extract_features(soxl_15m)
-    soxl_15m_feat = moe.gbdt_engine.add_confidence_columns(soxl_15m_feat)
+    tqqq_15m_feat = moe.gbdt_engine.extract_features(tqqq_15m)
+    tqqq_15m_feat = moe.gbdt_engine.add_confidence_columns(tqqq_15m_feat)
 
-    soxs_15m_feat = moe.gbdt_engine.extract_features(soxs_15m)
-    soxs_15m_feat.set_index('datetime', inplace=True, drop=False)
+    sqqq_15m_feat = moe.gbdt_engine.extract_features(sqqq_15m)
+    sqqq_15m_feat.set_index('datetime', inplace=True, drop=False)
 
     # 크로스에셋 모델 신호 계산 (패치된 단위 자동정규화 및 파라미터 적용)
     cross_mod = CrossAssetDislocationModel(dislocation_z_threshold=1.6)
@@ -75,22 +75,22 @@ def run_chronological_5m_backtest():
     soxx_map = soxx_15m.set_index('datetime')['Close'].to_dict() if not soxx_15m.empty else {}
     qqq_map  = qqq_15m.set_index('datetime')['Close'].to_dict()
     vix_map  = vix_15m.set_index('datetime')['Close'].to_dict()
-    soxl_close_arr = soxl_15m['Close'].values
-    soxl_dt_arr = soxl_15m['datetime'].values
+    tqqq_close_arr = tqqq_15m['Close'].values
+    tqqq_dt_arr = tqqq_15m['datetime'].values
 
     cross_dirs = []
     cross_confs = []
 
-    for i in range(len(soxl_15m)):
+    for i in range(len(tqqq_15m)):
         if i < 5:
             cross_dirs.append("NONE")
             cross_confs.append(0.50)
             continue
 
-        c_t = soxl_dt_arr[i]
-        p_t = soxl_dt_arr[i-5]
+        c_t = tqqq_dt_arr[i]
+        p_t = tqqq_dt_arr[i-5]
 
-        s_r = float(soxl_close_arr[i] / soxl_close_arr[i-5] - 1.0)
+        s_r = float(tqqq_close_arr[i] / tqqq_close_arr[i-5] - 1.0)
         if (c_t in nvda_map and p_t in nvda_map and
             c_t in qqq_map and p_t in qqq_map and
             c_t in vix_map and p_t in vix_map):
@@ -100,14 +100,14 @@ def run_chronological_5m_backtest():
             v_r = float(vix_map[c_t] / vix_map[p_t] - 1.0)
 
             sig_code, exp_conf, _ = cross_mod.predict_signal(
-                soxl_ret=s_r,
+                tqqq_ret=s_r,
                 nvda_ret=n_r,
                 soxx_ret=sx_r,
                 qqq_ret=q_r,
                 vix_ret=v_r,
                 tnx_ret=0.0
             )
-            c_dir = "LONG_SOXL" if sig_code > 0 else ("SHORT_SOXS" if sig_code < 0 else "NONE")
+            c_dir = "LONG_TQQQ" if sig_code > 0 else ("SHORT_SQQQ" if sig_code < 0 else "NONE")
             c_conf = exp_conf
         else:
             c_dir = "NONE"
@@ -116,11 +116,11 @@ def run_chronological_5m_backtest():
         cross_dirs.append(c_dir)
         cross_confs.append(c_conf)
 
-    soxl_15m_feat['cross_dir'] = cross_dirs
-    soxl_15m_feat['cross_conf'] = cross_confs
-    soxl_15m_feat.set_index('datetime', inplace=True, drop=False)
+    tqqq_15m_feat['cross_dir'] = cross_dirs
+    tqqq_15m_feat['cross_conf'] = cross_confs
+    tqqq_15m_feat.set_index('datetime', inplace=True, drop=False)
 
-    unique_dates = sorted(soxl_15m_feat['date_str'].unique())
+    unique_dates = sorted(tqqq_15m_feat['date_str'].unique())
 
     # 3. 실전 하드룰 파라미터 (Hard Rules)
     INITIAL_CAPITAL = 10_000.0   # $10,000 USD (복리 100% 자본 투입)
@@ -139,21 +139,21 @@ def run_chronological_5m_backtest():
     monthly_stats = {}
 
     for d_str in unique_dates:
-        day_soxl_15 = soxl_15m_feat[soxl_15m_feat['date_str'] == d_str]
-        if len(day_soxl_15) < 5:
+        day_tqqq_15 = tqqq_15m_feat[tqqq_15m_feat['date_str'] == d_str]
+        if len(day_tqqq_15) < 5:
             continue
 
-        day_soxl_5 = soxl_5m[soxl_5m['date_str'] == d_str]
-        day_soxs_5 = soxs_5m[soxs_5m['date_str'] == d_str]
+        day_tqqq_5 = tqqq_5m[tqqq_5m['date_str'] == d_str]
+        day_sqqq_5 = sqqq_5m[sqqq_5m['date_str'] == d_str]
 
         # [Rule 5] 매 정규장 개장(09:30) 시 일일 서킷 브레이커 카운트 0 리셋
         daily_stoploss_count = 0
         b_idx = 0
-        n_bars = len(day_soxl_15)
+        n_bars = len(day_tqqq_15)
 
         # 시간 흐름 순서대로 15분봉 바 스캔
         while b_idx < n_bars:
-            cur_15m_row = day_soxl_15.iloc[b_idx]
+            cur_15m_row = day_tqqq_15.iloc[b_idx]
             cur_15m_time = cur_15m_row['datetime']
             time_str = cur_15m_row['time_str']
 
@@ -173,12 +173,12 @@ def run_chronological_5m_backtest():
             dir_cross = cur_15m_row['cross_dir']
 
             # 공격수: GBDT >= 60%
-            is_gbdt_trigger = (dir_gbdt in ["LONG_SOXL", "SHORT_SOXS"]) and (conf_gbdt >= GBDT_THRESHOLD)
+            is_gbdt_trigger = (dir_gbdt in ["LONG_TQQQ", "SHORT_SQQQ"]) and (conf_gbdt >= GBDT_THRESHOLD)
 
             # 방패: 크로스에셋 정반대 방향 시 100% Veto 차단
             is_cross_veto = (
-                (dir_gbdt == "LONG_SOXL" and dir_cross == "SHORT_SOXS") or
-                (dir_gbdt == "SHORT_SOXS" and dir_cross == "LONG_SOXL")
+                (dir_gbdt == "LONG_TQQQ" and dir_cross == "SHORT_SQQQ") or
+                (dir_gbdt == "SHORT_SQQQ" and dir_cross == "LONG_TQQQ")
             )
 
             if not is_gbdt_trigger or is_cross_veto:
@@ -190,18 +190,18 @@ def run_chronological_5m_backtest():
             # [Rule 1] 3중 스크린 검증 (Look-ahead bias 방지: t시점 이전 데이터만 사용)
             # Screen 1: 상위 60분봉 추세 정렬
             past_soxx_60 = soxx_60m[soxx_60m['datetime'] <= cur_15m_time]
-            past_soxl_60 = soxl_60m[soxl_60m['datetime'] <= cur_15m_time]
+            past_tqqq_60 = tqqq_60m[tqqq_60m['datetime'] <= cur_15m_time]
 
             is_60m_trend_ok = True
-            if len(past_soxx_60) >= 20 and len(past_soxl_60) >= 20:
+            if len(past_soxx_60) >= 20 and len(past_tqqq_60) >= 20:
                 soxx_c = past_soxx_60['Close'].iloc[-1]
-                soxl_c = past_soxl_60['Close'].iloc[-1]
+                tqqq_c = past_tqqq_60['Close'].iloc[-1]
                 soxx_ema20 = past_soxx_60['ema20'].iloc[-1]
-                soxl_ema20 = past_soxl_60['ema20'].iloc[-1]
+                tqqq_ema20 = past_tqqq_60['ema20'].iloc[-1]
 
-                if direction == "LONG_SOXL":
-                    is_60m_trend_ok = (soxx_c >= soxx_ema20 * 0.998) and (soxl_c >= soxl_ema20 * 0.998)
-                elif direction == "SHORT_SOXS":
+                if direction == "LONG_TQQQ":
+                    is_60m_trend_ok = (soxx_c >= soxx_ema20 * 0.998) and (tqqq_c >= tqqq_ema20 * 0.998)
+                elif direction == "SHORT_SQQQ":
                     is_60m_trend_ok = (soxx_c <= soxx_ema20 * 1.002)
 
             if not is_60m_trend_ok:
@@ -209,7 +209,7 @@ def run_chronological_5m_backtest():
                 continue
 
             # Screen 3: 단기 눌림목 타점 검증
-            if direction == "LONG_SOXL":
+            if direction == "LONG_TQQQ":
                 vwap_diff = float(cur_15m_row.get("VWAP_Diff", 0.0))
                 rsi_14 = float(cur_15m_row.get("RSI_14", 50.0))
                 bb_lower = float(cur_15m_row.get("BB_Lower", 0.0))
@@ -218,8 +218,8 @@ def run_chronological_5m_backtest():
                 if bb_lower > 0:
                     dip_ok = dip_ok and (cur_close >= bb_lower * 1.001)
             else:
-                if cur_15m_time in soxs_15m_feat.index:
-                    row_s = soxs_15m_feat.loc[cur_15m_time]
+                if cur_15m_time in sqqq_15m_feat.index:
+                    row_s = sqqq_15m_feat.loc[cur_15m_time]
                     vwap_diff = float(row_s.get("VWAP_Diff", 0.0))
                     rsi_14 = float(row_s.get("RSI_14", 50.0))
                     bb_lower = float(row_s.get("BB_Lower", 0.0))
@@ -237,8 +237,8 @@ def run_chronological_5m_backtest():
             # -------------------------------------------------------------
             # [진입 집행: 3대 인터락 통과]
             # -------------------------------------------------------------
-            chosen_symbol = "SOXL" if direction == "LONG_SOXL" else "SOXS"
-            base_px = float(cur_15m_row['Close']) if chosen_symbol == "SOXL" else float(soxs_15m_feat.loc[cur_15m_time]['Close'])
+            chosen_symbol = "TQQQ" if direction == "LONG_TQQQ" else "SQQQ"
+            base_px = float(cur_15m_row['Close']) if chosen_symbol == "TQQQ" else float(sqqq_15m_feat.loc[cur_15m_time]['Close'])
             entry_px = round(base_px + SLIPPAGE, 2)
             shares = int(capital / entry_px)
             invested = shares * entry_px
@@ -250,7 +250,7 @@ def run_chronological_5m_backtest():
             # -------------------------------------------------------------
             # [5분봉 정밀 궤적(Intraday 5m Path Tracking) 청산 감시]
             # -------------------------------------------------------------
-            target_5m_df = day_soxl_5 if chosen_symbol == "SOXL" else day_soxs_5
+            target_5m_df = day_tqqq_5 if chosen_symbol == "TQQQ" else day_sqqq_5
             post_5m = target_5m_df[target_5m_df['datetime'] > cur_15m_time]
 
             if post_5m.empty:

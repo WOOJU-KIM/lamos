@@ -13,12 +13,12 @@ if sys.platform.startswith('win'):
 def run_analysis():
     conn = sqlite3.connect('data/market_data.db')
     
-    # Analyze SOXL 5m and 15m
+    # Analyze TQQQ 5m and 15m
     for tf in ['5m', '15m']:
         query = f"""
             SELECT symbol, datetime, open, high, low, close, volume
             FROM market_candles
-            WHERE timeframe = '{tf}' AND symbol in ('SOXL', 'QQQ', 'NVDA')
+            WHERE timeframe = '{tf}' AND symbol in ('TQQQ', 'QQQ', 'NVDA')
             ORDER BY datetime ASC
         """
         df = pd.read_sql_query(query, conn)
@@ -34,7 +34,7 @@ def run_analysis():
         print(f"📊 [{tf} 타임프레임 시간대별 변동성 및 거래량 정량 분석]")
         print(f"========================================================")
         
-        for sym in ['SOXL', 'QQQ', 'NVDA']:
+        for sym in ['TQQQ', 'QQQ', 'NVDA']:
             sub = df[df['symbol'] == sym].copy()
             if sub.empty:
                 continue
@@ -73,25 +73,25 @@ def run_analysis():
             
             print(b_summary.to_string(index=False))
 
-    # Detailed Close Breakdown for SOXL 5m
+    # Detailed Close Breakdown for TQQQ 5m
     print("\n" + "="*80)
-    print("🔬 [SOXL 5분봉: 14:30 ~ 15:55 장 마감 시간대 5분별 초정밀 분석]")
+    print("🔬 [TQQQ 5분봉: 14:30 ~ 15:55 장 마감 시간대 5분별 초정밀 분석]")
     print("="*80)
-    soxl_5m = pd.read_sql_query("""
+    tqqq_5m = pd.read_sql_query("""
         SELECT datetime, open, high, low, close, volume
         FROM market_candles
-        WHERE timeframe = '5m' AND symbol = 'SOXL'
+        WHERE timeframe = '5m' AND symbol = 'TQQQ'
         ORDER BY datetime ASC
     """, conn)
-    soxl_5m['datetime'] = pd.to_datetime(soxl_5m['datetime'])
-    soxl_5m['time'] = soxl_5m['datetime'].dt.strftime('%H:%M')
-    soxl_5m['date'] = soxl_5m['datetime'].dt.strftime('%Y-%m-%d')
-    soxl_5m['range_pct'] = (soxl_5m['high'] - soxl_5m['low']) / soxl_5m['open'] * 100.0
-    soxl_5m['body_pct'] = (soxl_5m['close'] - soxl_5m['open']).abs() / soxl_5m['open'] * 100.0
-    daily_vol = soxl_5m.groupby('date')['volume'].transform('sum')
-    soxl_5m['vol_share_pct'] = (soxl_5m['volume'] / (daily_vol + 1e-9)) * 100.0
+    tqqq_5m['datetime'] = pd.to_datetime(tqqq_5m['datetime'])
+    tqqq_5m['time'] = tqqq_5m['datetime'].dt.strftime('%H:%M')
+    tqqq_5m['date'] = tqqq_5m['datetime'].dt.strftime('%Y-%m-%d')
+    tqqq_5m['range_pct'] = (tqqq_5m['high'] - tqqq_5m['low']) / tqqq_5m['open'] * 100.0
+    tqqq_5m['body_pct'] = (tqqq_5m['close'] - tqqq_5m['open']).abs() / tqqq_5m['open'] * 100.0
+    daily_vol = tqqq_5m.groupby('date')['volume'].transform('sum')
+    tqqq_5m['vol_share_pct'] = (tqqq_5m['volume'] / (daily_vol + 1e-9)) * 100.0
     
-    close_soxl = soxl_5m[soxl_5m['time'] >= '14:30'].groupby('time').agg(
+    close_tqqq = tqqq_5m[tqqq_5m['time'] >= '14:30'].groupby('time').agg(
         avg_range=('range_pct', 'mean'),
         p90_range=('range_pct', lambda x: np.percentile(x, 90)),
         max_range=('range_pct', 'max'),
@@ -101,27 +101,27 @@ def run_analysis():
         prob_over_1_5pct=('range_pct', lambda x: (x >= 1.5).mean() * 100.0),
         count=('range_pct', 'count')
     ).reset_index()
-    print(close_soxl.to_string(index=False))
+    print(close_tqqq.to_string(index=False))
 
-    # Also 15m SOXL detailed breakdown for afternoon
+    # Also 15m TQQQ detailed breakdown for afternoon
     print("\n" + "="*80)
-    print("🔬 [SOXL 15분봉: 오후 및 장 마감 15분별 분석]")
+    print("🔬 [TQQQ 15분봉: 오후 및 장 마감 15분별 분석]")
     print("="*80)
-    soxl_15m = pd.read_sql_query("""
+    tqqq_15m = pd.read_sql_query("""
         SELECT datetime, open, high, low, close, volume
         FROM market_candles
-        WHERE timeframe = '15m' AND symbol = 'SOXL'
+        WHERE timeframe = '15m' AND symbol = 'TQQQ'
         ORDER BY datetime ASC
     """, conn)
-    soxl_15m['datetime'] = pd.to_datetime(soxl_15m['datetime'])
-    soxl_15m['time'] = soxl_15m['datetime'].dt.strftime('%H:%M')
-    soxl_15m['date'] = soxl_15m['datetime'].dt.strftime('%Y-%m-%d')
-    soxl_15m['range_pct'] = (soxl_15m['high'] - soxl_15m['low']) / soxl_15m['open'] * 100.0
-    soxl_15m['body_pct'] = (soxl_15m['close'] - soxl_15m['open']).abs() / soxl_15m['open'] * 100.0
-    daily_vol_15 = soxl_15m.groupby('date')['volume'].transform('sum')
-    soxl_15m['vol_share_pct'] = (soxl_15m['volume'] / (daily_vol_15 + 1e-9)) * 100.0
+    tqqq_15m['datetime'] = pd.to_datetime(tqqq_15m['datetime'])
+    tqqq_15m['time'] = tqqq_15m['datetime'].dt.strftime('%H:%M')
+    tqqq_15m['date'] = tqqq_15m['datetime'].dt.strftime('%Y-%m-%d')
+    tqqq_15m['range_pct'] = (tqqq_15m['high'] - tqqq_15m['low']) / tqqq_15m['open'] * 100.0
+    tqqq_15m['body_pct'] = (tqqq_15m['close'] - tqqq_15m['open']).abs() / tqqq_15m['open'] * 100.0
+    daily_vol_15 = tqqq_15m.groupby('date')['volume'].transform('sum')
+    tqqq_15m['vol_share_pct'] = (tqqq_15m['volume'] / (daily_vol_15 + 1e-9)) * 100.0
     
-    close_soxl_15 = soxl_15m[soxl_15m['time'] >= '13:00'].groupby('time').agg(
+    close_tqqq_15 = tqqq_15m[tqqq_15m['time'] >= '13:00'].groupby('time').agg(
         avg_range=('range_pct', 'mean'),
         p90_range=('range_pct', lambda x: np.percentile(x, 90)),
         max_range=('range_pct', 'max'),
@@ -131,7 +131,7 @@ def run_analysis():
         prob_over_2pct=('range_pct', lambda x: (x >= 2.0).mean() * 100.0),
         count=('range_pct', 'count')
     ).reset_index()
-    print(close_soxl_15.to_string(index=False))
+    print(close_tqqq_15.to_string(index=False))
 
 if __name__ == '__main__':
     run_analysis()

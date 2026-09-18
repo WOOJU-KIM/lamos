@@ -36,12 +36,12 @@ def run_retrain_gbdt_3class():
     registry = ModelRegistry()
 
     # 1. 데이터 로드 (최근 504 거래일 롤링 윈도우 고정)
-    print("\n⏳ [1/5] 시장 데이터 레이크(SOXL 15m) 최근 504 거래일 롤링 윈도우 로드...")
-    df_15m = data_lake.load_rolling_candles("SOXL", "15m", max_trading_days=504)
+    print("\n⏳ [1/5] 시장 데이터 레이크(TQQQ 15m) 최근 504 거래일 롤링 윈도우 로드...")
+    df_15m = data_lake.load_rolling_candles("TQQQ", "15m", max_trading_days=504)
     if df_15m.empty or len(df_15m) < 100:
         print("⚠️ 로컬 DB 데이터 부족으로 Yahoo Finance에서 수집...")
-        data_lake.harvest_symbol("SOXL", "15m", period="60d")
-        df_15m = data_lake.load_rolling_candles("SOXL", "15m", max_trading_days=504)
+        data_lake.harvest_symbol("TQQQ", "15m", period="60d")
+        df_15m = data_lake.load_rolling_candles("TQQQ", "15m", max_trading_days=504)
 
     unique_days_count = len(df_15m.index.strftime('%Y-%m-%d').unique())
     print(f"   ✅ 총 {len(df_15m):,}개 15분봉 캔들 확보 완료 (최근 {unique_days_count}개 거래일 롤링 윈도우 적용)")
@@ -61,8 +61,8 @@ def run_retrain_gbdt_3class():
     counts = feat_df['Target'].value_counts()
     total_valid = len(feat_df.dropna())
     print("   📊 [Triple Barrier 정답지 클래스 분포]:")
-    print(f"      • Class  1 (SOXL 롱 TP +3.5% 선도달): {counts.get(1, 0):4d}개 ({counts.get(1, 0)/total_valid*100:5.2f}%)")
-    print(f"      • Class -1 (SOXS 숏 TP -3.5% 선도달): {counts.get(-1, 0):4d}개 ({counts.get(-1, 0)/total_valid*100:5.2f}%)")
+    print(f"      • Class  1 (TQQQ 롱 TP +3.5% 선도달): {counts.get(1, 0):4d}개 ({counts.get(1, 0)/total_valid*100:5.2f}%)")
+    print(f"      • Class -1 (SQQQ 숏 TP -3.5% 선도달): {counts.get(-1, 0):4d}개 ({counts.get(-1, 0)/total_valid*100:5.2f}%)")
     print(f"      • Class  0 (관망/횡보/타임스탑 청산):    {counts.get(0, 0):4d}개 ({counts.get(0, 0)/total_valid*100:5.2f}%)")
 
     # 3. 3-Class 다중 분류 모델 학습 (과거 캔들 + 실시간 실전 거래 2.5x 가중치 통합)

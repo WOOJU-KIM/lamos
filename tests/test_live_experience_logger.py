@@ -32,7 +32,7 @@ class TestLiveExperienceLogger(unittest.TestCase):
         """[검증 1] 거래 기록 시 CSV와 SQLite DB에 완벽히 동시 적재되는지 검증"""
         sample_trade = {
             "mode": "VIRTUAL",
-            "symbol": "SOXL",
+            "symbol": "TQQQ",
             "entry_time": "2026-09-14 09:45:00",
             "exit_time": "2026-09-14 10:15:00",
             "intended_entry_price": 120.00,
@@ -63,7 +63,7 @@ class TestLiveExperienceLogger(unittest.TestCase):
         self.assertTrue(self.csv_path.exists())
         df = pd.read_csv(self.csv_path)
         self.assertEqual(len(df), 1)
-        self.assertEqual(df.iloc[0]["symbol"], "SOXL")
+        self.assertEqual(df.iloc[0]["symbol"], "TQQQ")
         self.assertEqual(df.iloc[0]["quantity"], 100)
         self.assertAlmostEqual(df.iloc[0]["entry_slippage_usd"], 0.03, places=2)
         self.assertAlmostEqual(df.iloc[0]["mfe_pct"], 3.25, places=2)
@@ -77,7 +77,7 @@ class TestLiveExperienceLogger(unittest.TestCase):
             c.execute("SELECT * FROM live_trades WHERE trade_id = ?", (trade_id,))
             row = c.fetchone()
             self.assertIsNotNone(row)
-            self.assertEqual(row["symbol"], "SOXL")
+            self.assertEqual(row["symbol"], "TQQQ")
             self.assertEqual(row["exit_reason"], "TAKE_PROFIT_3.0%")
             self.assertAlmostEqual(row["gbdt_confidence"], 0.6540, places=4)
         finally:
@@ -86,7 +86,7 @@ class TestLiveExperienceLogger(unittest.TestCase):
     def test_record_order_event(self):
         """[검증 2] 3초 타임아웃 및 주문 체이싱 이벤트가 SQLite에 올바르게 기록되는지 검증"""
         self.logger.record_order_event(
-            symbol="SOXL",
+            symbol="TQQQ",
             action="BUY",
             attempt=1,
             order_no="12345",
@@ -131,7 +131,7 @@ class TestLiveExperienceLogger(unittest.TestCase):
     def test_summary_stats(self):
         """[검증 4] 누적 승률 및 슬리피지 통계 산출 정확성 검증"""
         self.logger.record_trade({
-            "symbol": "SOXL",
+            "symbol": "TQQQ",
             "quantity": 10,
             "actual_entry_price": 100.0,
             "intended_entry_price": 99.98,
@@ -142,7 +142,7 @@ class TestLiveExperienceLogger(unittest.TestCase):
             "hold_minutes": 25.0
         })
         self.logger.record_trade({
-            "symbol": "SOXS",
+            "symbol": "SQQQ",
             "quantity": 20,
             "actual_entry_price": 50.0,
             "intended_entry_price": 50.02,

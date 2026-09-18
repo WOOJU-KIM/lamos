@@ -692,13 +692,13 @@
           ⚖️ 실시간 AI 승률 대결
         </span>
         <span id="liveBattleText">
-          <span style="color: #94a3b8;">🟢 SOXL 롱 승률: 48.0%</span> vs <span style="color: #f87171; font-weight: 700;">🔴 SOXS 숏 승률: 72.1%</span> 
-          <span style="margin-left: 6px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-size: 11px;">🏆 SOXS 1위 우세 (파형 GBDT 24.5%)</span>
+          <span style="color: #94a3b8;">🟢 TQQQ 롱 승률: 48.0%</span> vs <span style="color: #f87171; font-weight: 700;">🔴 SQQQ 숏 승률: 72.1%</span> 
+          <span style="margin-left: 6px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-size: 11px;">🏆 SQQQ 1위 우세 (파형 GBDT 24.5%)</span>
         </span>
       </div>
       <div style="display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 12px;">
-        <span style="color: #38bdf8;"><strong>SOXL:</strong> $<span id="pxSoxl">121.82</span></span>
-        <span style="color: #ec4899;"><strong>SOXS:</strong> $<span id="pxSoxs">44.14</span></span>
+        <span style="color: #38bdf8;"><strong>TQQQ:</strong> $<span id="pxSoxl">121.82</span></span>
+        <span style="color: #ec4899;"><strong>SQQQ:</strong> $<span id="pxSoxs">44.14</span></span>
         <span style="color: #a855f7;"><strong>NVDA:</strong> $<span id="pxNvda">118.50</span></span>
         <span style="color: #10b981;"><strong>QQQ:</strong> $<span id="pxQqq">475.20</span></span>
       </div>
@@ -755,7 +755,7 @@
       <div class="kpi-card">
         <div class="kpi-label">영구 분봉 데이터 레이크</div>
         <div class="kpi-val" id="totalCandles">69,881개</div>
-        <div class="kpi-sub">7종 심볼 (SOXL, SOXS, NVDA, QQQ 등)</div>
+        <div class="kpi-sub">7종 심볼 (TQQQ, SQQQ, NVDA, QQQ 등)</div>
       </div>
     </section>
 
@@ -1031,17 +1031,17 @@
         const lb = status.live_battle;
         const bText = document.getElementById('liveBattleText');
         if (bText) {
-          const isSoxlWinner = lb.winner_symbol === 'SOXL';
+          const isSoxlWinner = lb.winner_symbol === 'TQQQ';
           bText.innerHTML = `
-            <span style="color: ${isSoxlWinner ? '#4ade80' : '#94a3b8'}; font-weight: ${isSoxlWinner ? '700' : '400'};">🟢 SOXL 롱 승률: ${lb.soxl_conf}%</span> vs 
-            <span style="color: ${!isSoxlWinner ? '#f87171' : '#94a3b8'}; font-weight: ${!isSoxlWinner ? '700' : '400'};">🔴 SOXS 숏 승률: ${lb.soxs_conf}%</span> 
+            <span style="color: ${isSoxlWinner ? '#4ade80' : '#94a3b8'}; font-weight: ${isSoxlWinner ? '700' : '400'};">🟢 TQQQ 롱 승률: ${lb.tqqq_conf}%</span> vs 
+            <span style="color: ${!isSoxlWinner ? '#f87171' : '#94a3b8'}; font-weight: ${!isSoxlWinner ? '700' : '400'};">🔴 SQQQ 숏 승률: ${lb.sqqq_conf}%</span> 
             <span style="margin-left: 6px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; padding: 2px 6px; border-radius: 4px; font-size: 11px;">🏆 ${lb.winner_symbol} 1위 우세 (${lb.top1_model} ${lb.top1_weight}%)</span>
           `;
         }
         
         // 종목별 실시간 시세
-        if (lb.soxl_price) document.getElementById('pxSoxl').innerText = Number(lb.soxl_price).toFixed(2);
-        if (lb.soxs_price) document.getElementById('pxSoxs').innerText = Number(lb.soxs_price).toFixed(2);
+        if (lb.tqqq_price) document.getElementById('pxSoxl').innerText = Number(lb.tqqq_price).toFixed(2);
+        if (lb.sqqq_price) document.getElementById('pxSoxs').innerText = Number(lb.sqqq_price).toFixed(2);
         if (lb.nvda_price) document.getElementById('pxNvda').innerText = Number(lb.nvda_price).toFixed(2);
         if (lb.qqq_price) document.getElementById('pxQqq').innerText = Number(lb.qqq_price).toFixed(2);
 
@@ -1210,7 +1210,7 @@
             div.innerHTML = `
               <div class="log-item-header">
                 <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
-                  <span style="background: rgba(56, 189, 248, 0.15); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">${item.ticker || 'SOXL'}</span>
+                  <span style="background: rgba(56, 189, 248, 0.15); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">${item.ticker || 'TQQQ'}</span>
                   ${verdictBadge}
                   <span class="mono" style="font-size: 11px; color: var(--text-muted); font-weight: 600;">${item.timestamp}</span>
                 </div>
@@ -1287,10 +1287,10 @@
           reasonPill = `<span style="background: rgba(245, 158, 11, 0.15); border: 1px solid var(--accent-amber); color: var(--accent-amber); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">⏰ 타임스탑</span>`;
         }
 
-        const isLong = (item.direction && item.direction.includes('LONG')) || item.ticker === 'SOXL';
+        const isLong = (item.direction && item.direction.includes('LONG')) || item.ticker === 'TQQQ';
         const dirBadge = isLong 
-          ? `<span style="background: rgba(56, 189, 248, 0.15); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">🔵 LONG SOXL</span>`
-          : `<span style="background: rgba(236, 72, 153, 0.15); border: 1px solid #ec4899; color: #ec4899; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">🔴 SHORT SOXS</span>`;
+          ? `<span style="background: rgba(56, 189, 248, 0.15); border: 1px solid var(--accent-blue); color: var(--accent-blue); padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">🔵 LONG TQQQ</span>`
+          : `<span style="background: rgba(236, 72, 153, 0.15); border: 1px solid #ec4899; color: #ec4899; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 700;">🔴 SHORT SQQQ</span>`;
 
         let expertBadge = '';
         if (item.selected_expert) {

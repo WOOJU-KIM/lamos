@@ -25,7 +25,7 @@ broker = KiwoomBroker()
 dispatcher = DispatcherAgent(TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID)
 token = broker.get_access_token()
 
-symbols = ["SOXL", "SOXS", "NVDA", "QQQ"]
+symbols = ["TQQQ", "SQQQ", "NVDA", "QQQ"]
 
 # 1. 구독(Subscribe) 패킷 생성 및 구조 검증
 print("\n[1/5] 실시간 종목 구독(Subscribe) 패킷 빌드 및 규격 검증:")
@@ -58,11 +58,11 @@ unsub_packet = {
     "body": {
         "input": {
             "tr_id": "ust01000",
-            "tr_key": "SOXL"
+            "tr_key": "TQQQ"
         }
     }
 }
-print(f"   • SOXL 해제 패킷 (tr_type=2) -> ✅ 유효")
+print(f"   • TQQQ 해제 패킷 (tr_type=2) -> ✅ 유효")
 
 # 3. 실시간 틱 수신 콜백 레이턴시 벤치마크
 print("\n[3/5] 실시간 틱 수신 -> 익절/손절 트리거 레이턴시(반응 속도) 벤치마크:")
@@ -80,10 +80,10 @@ def test_callback(sym, px, tick_info):
 
 streamer.register_callback(test_callback)
 
-# 가상 실시간 틱 주입 (SOXL +3.5% 급등 틱 모의 주입)
+# 가상 실시간 틱 주입 (TQQQ +3.5% 급등 틱 모의 주입)
 bench_start = time.time()
 sample_tick_msg = json.dumps({
-    "symb": "SOXL",
+    "symb": "TQQQ",
     "last_price": 156.83,
     "volume": 2500,
     "benchmark_start": bench_start
@@ -106,7 +106,7 @@ print("\n[5/5] 대표님 텔레그램으로 WebSocket 전수 시험 결과 리�
 msg = f"""⚡ **[키움증권 실시간 WebSocket 전수 명령 단대단(E2E) 시험 완료]**
 ━━━━━━━━━━━━━━━━━━━━
 🌐 **WebSocket 엔드포인트:** `{streamer.ws_url}`
-📡 **실시간 구독 종목:** `SOXL`, `SOXS`, `NVDA`, `QQQ` (TR: ust01000)
+📡 **실시간 구독 종목:** `TQQQ`, `SQQQ`, `NVDA`, `QQQ` (TR: ust01000)
 ⚡ **명령 처리 레이턴시:** `{latency_ms:.3f}ms` (초고속 이벤트 드리븐)
 🛡 **장애 대응 아키텍처:** `WebSocket 메인 + 2초 REST 듀얼 무중단 백업`
 

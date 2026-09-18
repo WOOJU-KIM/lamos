@@ -37,7 +37,7 @@ class KisClient:
     [한국투자증권(KIS) 해외주식 주문 및 계좌 관제 모듈 - 듀얼 모드 지원]
     - 모드: VIRTUAL (모의투자) | REAL (실전투자)
     - 토큰 자동 발급 및 캐싱 관리 (24시간 유효, 1분당 1회 레이트리밋 보호)
-    - 해외주식(SOXL, SOXS 등) 잔고 조회, 예수금 조회, 지정가/시장가 매수/매도 주문
+    - 해외주식(TQQQ, SQQQ 등) 잔고 조회, 예수금 조회, 지정가/시장가 매수/매도 주문
     - 실전투자 모드 안전장치(Safety Guard) 및 오버나잇 0% 자동 청산 가드 내장
     """
     def __init__(self, mode: Optional[str] = None):
@@ -218,7 +218,7 @@ class KisClient:
     def get_exchange_code(self, ticker: str) -> str:
         """
         종목별 KIS 해외 거래소 코드 자동 매핑
-        - VIRTUAL 모드: 'NASD' (모의투자는 SOXL/SOXS를 NASD/NYSE로 라우팅)
+        - VIRTUAL 모드: 'NASD' (모의투자는 TQQQ/SQQQ를 NASD/NYSE로 라우팅)
         - REAL 모드: 'AMS' (NYSE American / Arca) 또는 'NASD'
         """
         t = ticker.upper().strip()
@@ -226,9 +226,10 @@ class KisClient:
             return "NASD"
         
         # REAL 모드
-        if t in ["SOXL", "SOXS", "SPY"]:
-            return "AMS"   # NYSE American / Arca
-        return "NASD"
+        if t in ["SPY"]:
+            return "NYSE"
+        else:
+            return "NASD"
 
     # =========================================================================
     # [3. 해외주식 잔고 조회 (Inquire Balance)]
@@ -288,7 +289,7 @@ class KisClient:
     # =========================================================================
     # [4. 해외주식 주문가능금액 / 예수금 조회]
     # =========================================================================
-    def inquire_deposit(self, ticker: str = "SOXL", price: float = 10.0) -> Dict[str, Any]:
+    def inquire_deposit(self, ticker: str = "TQQQ", price: float = 10.0) -> Dict[str, Any]:
         """해외주식 매수가능금액(예수금) 조회 (거래소 자동 폴백 지원)"""
         url = f"{self.base_url}/uapi/overseas-stock/v1/trading/inquire-psamount"
         headers = self._get_common_headers(self.tr_id_deposit)
@@ -348,7 +349,7 @@ class KisClient:
     ) -> Dict[str, Any]:
         """
         해외주식 매수/매도 주문 실행
-        - ticker: 종목코드 (SOXL, SOXS 등)
+        - ticker: 종목코드 (TQQQ, SQQQ 등)
         - order_type: BUY (매수) | SELL (매도)
         - qty: 수량
         - price: 주문단가 (지정가)
@@ -450,7 +451,7 @@ class KisClient:
             test_summary["token_snippet"] = token[:10] + "..." if token else ""
 
             # 2. 예수금 조회 테스트
-            dep_res = self.inquire_deposit(ticker="SOXL", price=10.0)
+            dep_res = self.inquire_deposit(ticker="TQQQ", price=10.0)
             test_summary["deposit_ok"] = dep_res.get("ok", False)
             test_summary["avail_usd"] = dep_res.get("avail_usd", 0.0)
             test_summary["avail_krw"] = dep_res.get("avail_krw", 0.0)

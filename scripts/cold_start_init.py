@@ -46,10 +46,10 @@ def run_cold_start():
     # [2단계: 24% 검증 모델 학습 및 불변 파일 생성]
     # ----------------------------------------------------
     print("\n⏳ [2/4] 24% 검증 챔피언 머신러닝 모델 학습 및 불변 파일 직렬화...")
-    soxl_15m = data_lake.load_candles("SOXL", "15m")
+    tqqq_15m = data_lake.load_candles("TQQQ", "15m")
     ml_engine = MLFeatureEngine(confidence_threshold=0.40)
-    soxl_feat = ml_engine.extract_features(soxl_15m)
-    trained_model, top_10, top_3 = ml_engine.train_and_select_top_features(soxl_feat)
+    tqqq_feat = ml_engine.extract_features(tqqq_15m)
+    trained_model, top_10, top_3 = ml_engine.train_and_select_top_features(tqqq_feat)
 
     # ----------------------------------------------------
     # [3단계: 모델 레지스트리 공식 등록 (M-20260815-GOLDEN-V1)]
@@ -97,7 +97,7 @@ def run_cold_start():
 
 📦 **[1. 영구 분봉 데이터 레이크 (market_data.db)]**
 • **총 적재 캔들 수:** `{summary['total_candles']:,}개` 분봉 데이터
-• **수집 종목/주기:** SOXL, SOXS, SOXX, ^VIX (3m/5m, 15m, 60m 전수 확보)
+• **수집 종목/주기:** TQQQ, SQQQ, SOXX, ^VIX (3m/5m, 15m, 60m 전수 확보)
 • **효과:** 야후 60일 제한을 넘어 로컬에 장기 빅데이터 영구 자산화
 
 🥇 **[2. 불변 모델 레지스트리 (model_registry.db)]**

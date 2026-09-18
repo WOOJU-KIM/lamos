@@ -32,79 +32,79 @@ def format_markdown_table(df: pd.DataFrame, cols: list) -> str:
         rows.append(row_str)
     return "\n".join([header, separator] + rows)
 
-def run_soxl_soxs_dual_backtest():
+def run_tqqq_sqqq_dual_backtest():
     print("=" * 100)
-    print("🔬 [Lumos 퀀트 시스템: SOXL(롱) vs SOXS(숏) 독립 및 통합 듀얼 백테스트]")
+    print("🔬 [Lumos 퀀트 시스템: TQQQ(롱) vs SQQQ(숏) 독립 및 통합 듀얼 백테스트]")
     print(f"⏰ 실행 시각: {datetime.now().strftime('%Y-%m-%d %H:%M:%S KST')}")
     print("🔒 [보안 확인] 본 검증은 scripts/ 내 격리 스크립트로만 구동되며, core/ 운영 코드는 단 1바이트도 수정되지 않습니다.")
     print("=" * 100)
 
     # 1. 다중 타임프레임 데이터 로드 (최근 504 거래일 롤링 윈도우)
     lake = MarketDataLake()
-    soxl_15m = lake.load_rolling_candles('SOXL', '15m', max_trading_days=504)
-    soxs_15m = lake.load_rolling_candles('SOXS', '15m', max_trading_days=504)
-    soxl_5m  = lake.load_candles('SOXL', '5m')
-    soxs_5m  = lake.load_candles('SOXS', '5m')
+    tqqq_15m = lake.load_rolling_candles('TQQQ', '15m', max_trading_days=504)
+    sqqq_15m = lake.load_rolling_candles('SQQQ', '15m', max_trading_days=504)
+    tqqq_5m  = lake.load_candles('TQQQ', '5m')
+    sqqq_5m  = lake.load_candles('SQQQ', '5m')
     soxx_60m = lake.load_candles('SOXX', '60m')
-    soxl_60m = lake.load_candles('SOXL', '60m')
+    tqqq_60m = lake.load_candles('TQQQ', '60m')
     nvda_15m = lake.load_candles('NVDA', '15m')
     qqq_15m  = lake.load_candles('QQQ', '15m')
     vix_15m  = lake.load_candles('^VIX', '15m')
 
-    for df in [soxl_15m, soxs_15m, soxl_5m, soxs_5m, soxx_60m, soxl_60m, nvda_15m, qqq_15m, vix_15m]:
+    for df in [tqqq_15m, sqqq_15m, tqqq_5m, sqqq_5m, soxx_60m, tqqq_60m, nvda_15m, qqq_15m, vix_15m]:
         df['date_str'] = df.index.strftime('%Y-%m-%d')
         df['time_str'] = df.index.strftime('%H:%M')
 
-    unique_dates = sorted(soxl_15m['date_str'].unique())
+    unique_dates = sorted(tqqq_15m['date_str'].unique())
     num_days = len(unique_dates)
     num_months = num_days / 21.0
 
     # 2. 피처 사전 계산
     soxx_60m['ema20'] = soxx_60m['Close'].ewm(span=20, adjust=False).mean()
-    soxl_60m['ema20'] = soxl_60m['Close'].ewm(span=20, adjust=False).mean()
+    tqqq_60m['ema20'] = tqqq_60m['Close'].ewm(span=20, adjust=False).mean()
 
     moe = MoEMetaOrchestrator()
-    soxl_15m_feat = moe.gbdt_engine.extract_features(soxl_15m)
-    soxl_15m_feat = moe.gbdt_engine.add_confidence_columns(soxl_15m_feat)
-    soxs_15m_feat = moe.gbdt_engine.extract_features(soxs_15m)
-    soxs_15m_feat = moe.gbdt_engine.add_confidence_columns(soxs_15m_feat)
+    tqqq_15m_feat = moe.gbdt_engine.extract_features(tqqq_15m)
+    tqqq_15m_feat = moe.gbdt_engine.add_confidence_columns(tqqq_15m_feat)
+    sqqq_15m_feat = moe.gbdt_engine.extract_features(sqqq_15m)
+    sqqq_15m_feat = moe.gbdt_engine.add_confidence_columns(sqqq_15m_feat)
 
     cross_mod = CrossAssetDislocationModel(dislocation_z_threshold=1.6)
     cross_sigs, cross_confs, cross_dirs = [], [], []
 
-    for i in range(len(soxl_15m)):
-        t = soxl_15m.index[i]
+    for i in range(len(tqqq_15m)):
+        t = tqqq_15m.index[i]
         past_nvda = nvda_15m[nvda_15m.index <= t]
         past_qqq  = qqq_15m[qqq_15m.index <= t]
         past_vix  = vix_15m[vix_15m.index <= t]
-        past_soxl = soxl_15m[soxl_15m.index <= t]
+        past_tqqq = tqqq_15m[tqqq_15m.index <= t]
         
         c_sig, c_conf, c_dir = 0, 0.50, "NONE"
-        if len(past_nvda) >= 5 and len(past_qqq) >= 5 and len(past_vix) >= 5 and len(past_soxl) >= 5:
+        if len(past_nvda) >= 5 and len(past_qqq) >= 5 and len(past_vix) >= 5 and len(past_tqqq) >= 5:
             n_r = float(past_nvda['Close'].iloc[-1] / past_nvda['Close'].iloc[-5] - 1.0)
             q_r = float(past_qqq['Close'].iloc[-1] / past_qqq['Close'].iloc[-5] - 1.0)
             v_r = float(past_vix['Close'].iloc[-1] / past_vix['Close'].iloc[-5] - 1.0)
-            s_r = float(past_soxl['Close'].iloc[-1] / past_soxl['Close'].iloc[-5] - 1.0)
+            s_r = float(past_tqqq['Close'].iloc[-1] / past_tqqq['Close'].iloc[-5] - 1.0)
             
             sig_code, exp_conf, _ = cross_mod.predict_signal(
-                soxl_ret=s_r, nvda_ret=n_r, qqq_ret=q_r, soxx_ret=s_r, vix_ret=v_r, tnx_ret=0.0
+                tqqq_ret=s_r, nvda_ret=n_r, qqq_ret=q_r, soxx_ret=s_r, vix_ret=v_r, tnx_ret=0.0
             )
             c_sig = sig_code
             c_conf = exp_conf
             if sig_code > 0:
-                c_dir = "LONG_SOXL"
+                c_dir = "LONG_TQQQ"
             elif sig_code < 0:
-                c_dir = "SHORT_SOXS"
+                c_dir = "SHORT_SQQQ"
                 
         cross_sigs.append(c_sig)
         cross_confs.append(c_conf)
         cross_dirs.append(c_dir)
 
-    soxl_15m_feat['cross_sig'] = cross_sigs
-    soxl_15m_feat['cross_conf'] = cross_confs
-    soxl_15m_feat['cross_dir'] = cross_dirs
+    tqqq_15m_feat['cross_sig'] = cross_sigs
+    tqqq_15m_feat['cross_conf'] = cross_confs
+    tqqq_15m_feat['cross_dir'] = cross_dirs
 
-    # 3. 3개 모드 설정: SOXL 단독, SOXS 단독, 통합 듀얼 챔피언
+    # 3. 3개 모드 설정: TQQQ 단독, SQQQ 단독, 통합 듀얼 챔피언
     INITIAL_CAPITAL = 10_000_000.0
     FRICTION_PCT = 0.0034           # 0.34% 마찰비용
     TP_PCT = 0.035                  # +3.5%
@@ -115,24 +115,24 @@ def run_soxl_soxs_dual_backtest():
 
     modes = [
         {
-            "id": "SOXL_ONLY",
-            "name": "SOXL (3x 롱) 단독 운용",
-            "allow_soxl": True,
-            "allow_soxs": False,
+            "id": "TQQQ_ONLY",
+            "name": "TQQQ (3x 롱) 단독 운용",
+            "allow_tqqq": True,
+            "allow_sqqq": False,
             "desc": "상승장만 스나이핑 (하락장 100% 현금 대기)"
         },
         {
-            "id": "SOXS_ONLY",
-            "name": "SOXS (3x 숏) 단독 운용",
-            "allow_soxl": False,
-            "allow_soxs": True,
+            "id": "SQQQ_ONLY",
+            "name": "SQQQ (3x 숏) 단독 운용",
+            "allow_tqqq": False,
+            "allow_sqqq": True,
             "desc": "하락장만 인버스 스나이핑 (상승장 100% 현금 대기)"
         },
         {
             "id": "COMBINED",
-            "name": "통합 듀얼 챔피언 (SOXL + SOXS)",
-            "allow_soxl": True,
-            "allow_soxs": True,
+            "name": "통합 듀얼 챔피언 (TQQQ + SQQQ)",
+            "allow_tqqq": True,
+            "allow_sqqq": True,
             "desc": "양방향 전천후 자율 스나이핑 (시나리오 C 챔피언)"
         }
     ]
@@ -144,42 +144,42 @@ def run_soxl_soxs_dual_backtest():
         capital = INITIAL_CAPITAL
         trades = []
         equity_curve = [capital]
-        allow_l = m["allow_soxl"]
-        allow_s = m["allow_soxs"]
+        allow_l = m["allow_tqqq"]
+        allow_s = m["allow_sqqq"]
 
         for d_str in unique_dates:
-            day_soxl_15 = soxl_15m_feat[soxl_15m_feat['date_str'] == d_str]
-            if len(day_soxl_15) < 5:
+            day_tqqq_15 = tqqq_15m_feat[tqqq_15m_feat['date_str'] == d_str]
+            if len(day_tqqq_15) < 5:
                 continue
 
-            day_soxl_5 = soxl_5m[soxl_5m['date_str'] == d_str]
-            day_soxs_5 = soxs_5m[soxs_5m['date_str'] == d_str]
+            day_tqqq_5 = tqqq_5m[tqqq_5m['date_str'] == d_str]
+            day_sqqq_5 = sqqq_5m[sqqq_5m['date_str'] == d_str]
 
             b_idx = 0
-            n_bars = len(day_soxl_15)
+            n_bars = len(day_tqqq_15)
 
             while b_idx < n_bars:
-                cur_15m_time = day_soxl_15.index[b_idx]
+                cur_15m_time = day_tqqq_15.index[b_idx]
                 time_str = cur_15m_time.strftime('%H:%M')
 
                 if b_idx < 1 or time_str > "14:30":
                     b_idx += 1
                     continue
 
-                row_l = day_soxl_15.iloc[b_idx]
-                row_s = soxs_15m_feat.loc[cur_15m_time] if cur_15m_time in soxs_15m_feat.index else None
+                row_l = day_tqqq_15.iloc[b_idx]
+                row_s = sqqq_15m_feat.loc[cur_15m_time] if cur_15m_time in sqqq_15m_feat.index else None
 
                 # Screen 1
                 past_soxx = soxx_60m[soxx_60m.index <= cur_15m_time]
-                past_soxl = soxl_60m[soxl_60m.index <= cur_15m_time]
+                past_tqqq = tqqq_60m[tqqq_60m.index <= cur_15m_time]
                 is_60m_bull = False
                 is_60m_bear = False
-                if len(past_soxx) >= 20 and len(past_soxl) >= 20:
+                if len(past_soxx) >= 20 and len(past_tqqq) >= 20:
                     soxx_c = past_soxx['Close'].iloc[-1]
-                    soxl_c = past_soxl['Close'].iloc[-1]
+                    tqqq_c = past_tqqq['Close'].iloc[-1]
                     soxx_ema = past_soxx['ema20'].iloc[-1]
-                    soxl_ema = past_soxl['ema20'].iloc[-1]
-                    is_60m_bull = (soxx_c >= soxx_ema * 0.998) and (soxl_c >= soxl_ema * 0.998)
+                    tqqq_ema = past_tqqq['ema20'].iloc[-1]
+                    is_60m_bull = (soxx_c >= soxx_ema * 0.998) and (tqqq_c >= tqqq_ema * 0.998)
                     is_60m_bear = (soxx_c <= soxx_ema * 1.002)
 
                 # Screen 3
@@ -187,20 +187,20 @@ def run_soxl_soxs_dual_backtest():
                 rsi_14_l = float(row_l.get("RSI_14", 50.0))
                 bb_lower_l = float(row_l.get("BB_Lower", 0.0))
                 cur_close_l = float(row_l['Close'])
-                dip_ok_soxl = (vwap_diff_l <= 1.5) and (rsi_14_l <= 62.0)
+                dip_ok_tqqq = (vwap_diff_l <= 1.5) and (rsi_14_l <= 62.0)
                 if bb_lower_l > 0:
-                    dip_ok_soxl = dip_ok_soxl and (cur_close_l >= bb_lower_l * 1.001)
+                    dip_ok_tqqq = dip_ok_tqqq and (cur_close_l >= bb_lower_l * 1.001)
 
-                dip_ok_soxs = False
+                dip_ok_sqqq = False
                 cur_close_s = 40.0
                 if row_s is not None:
                     vwap_diff_s = float(row_s.get("VWAP_Diff", 0.0))
                     rsi_14_s = float(row_s.get("RSI_14", 50.0))
                     bb_lower_s = float(row_s.get("BB_Lower", 0.0))
                     cur_close_s = float(row_s['Close'])
-                    dip_ok_soxs = (vwap_diff_s <= 1.5) and (rsi_14_s <= 62.0)
+                    dip_ok_sqqq = (vwap_diff_s <= 1.5) and (rsi_14_s <= 62.0)
                     if bb_lower_s > 0:
-                        dip_ok_soxs = dip_ok_soxs and (cur_close_s >= bb_lower_s * 1.001)
+                        dip_ok_sqqq = dip_ok_sqqq and (cur_close_s >= bb_lower_s * 1.001)
 
                 dir_cross = row_l['cross_dir']
                 conf_cross = row_l['cross_conf']
@@ -210,18 +210,18 @@ def run_soxl_soxs_dual_backtest():
                 chosen_symbol = None
                 entry_px = 0.0
 
-                # SOXL 조건
-                if allow_l and (dir_cross == "LONG_SOXL" and dir_gbdt == "LONG_SOXL" and
+                # TQQQ 조건
+                if allow_l and (dir_cross == "LONG_TQQQ" and dir_gbdt == "LONG_TQQQ" and
                                 conf_cross >= C_TH and conf_gbdt >= G_TH and
-                                is_60m_bull and dip_ok_soxl):
-                    chosen_symbol = "SOXL"
+                                is_60m_bull and dip_ok_tqqq):
+                    chosen_symbol = "TQQQ"
                     entry_px = cur_close_l
 
-                # SOXS 조건
-                elif allow_s and (dir_cross == "SHORT_SOXS" and dir_gbdt == "SHORT_SOXS" and
+                # SQQQ 조건
+                elif allow_s and (dir_cross == "SHORT_SQQQ" and dir_gbdt == "SHORT_SQQQ" and
                                   conf_cross >= C_TH and conf_gbdt >= G_TH and
-                                  is_60m_bear and dip_ok_soxs):
-                    chosen_symbol = "SOXS"
+                                  is_60m_bear and dip_ok_sqqq):
+                    chosen_symbol = "SQQQ"
                     entry_px = cur_close_s
 
                 if chosen_symbol is None:
@@ -229,7 +229,7 @@ def run_soxl_soxs_dual_backtest():
                     continue
 
                 # 5분봉 궤적 추적 청산 시뮬레이션
-                df_5m_target = day_soxl_5 if chosen_symbol == "SOXL" else day_soxs_5
+                df_5m_target = day_tqqq_5 if chosen_symbol == "TQQQ" else day_sqqq_5
                 post_5m = df_5m_target[df_5m_target.index > cur_15m_time]
                 if post_5m.empty:
                     b_idx += 1
@@ -329,9 +329,9 @@ def run_soxl_soxs_dual_backtest():
                 })
 
                 if exit_5m_time:
-                    remaining_15m = day_soxl_15[day_soxl_15.index > exit_5m_time]
+                    remaining_15m = day_tqqq_15[day_tqqq_15.index > exit_5m_time]
                     if not remaining_15m.empty:
-                        b_idx = day_soxl_15.index.get_loc(remaining_15m.index[0])
+                        b_idx = day_tqqq_15.index.get_loc(remaining_15m.index[0])
                     else:
                         break
                 else:
@@ -373,7 +373,7 @@ def run_soxl_soxs_dual_backtest():
 
     # 4. 결과 출력
     print("\n" + "=" * 100)
-    print("🏆 [Lumos 듀얼 챔피언: SOXL 단독 vs SOXS 단독 vs 통합 듀얼 최종 성적표]")
+    print("🏆 [Lumos 듀얼 챔피언: TQQQ 단독 vs SQQQ 단독 vs 통합 듀얼 최종 성적표]")
     print("=" * 100)
     
     df_cmp = pd.DataFrame(all_results)
@@ -390,7 +390,7 @@ def run_soxl_soxs_dual_backtest():
     print("\n" + "=" * 100)
     print("🔍 [종목별 매매 내역 전수 대조 요약]")
     print("=" * 100)
-    for m_id, label in [("SOXL_ONLY", "SOXL 롱 단독"), ("SOXS_ONLY", "SOXS 숏 단독"), ("COMBINED", "통합 듀얼")]:
+    for m_id, label in [("TQQQ_ONLY", "TQQQ 롱 단독"), ("SQQQ_ONLY", "SQQQ 숏 단독"), ("COMBINED", "통합 듀얼")]:
         t_list = trade_logs[m_id]
         print(f"\n📌 [{label}] 총 {len(t_list)}건 매매:")
         for idx, t in enumerate(t_list):
@@ -399,4 +399,4 @@ def run_soxl_soxs_dual_backtest():
     return df_cmp, trade_logs
 
 if __name__ == "__main__":
-    run_soxl_soxs_dual_backtest()
+    run_tqqq_sqqq_dual_backtest()

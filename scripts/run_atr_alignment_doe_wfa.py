@@ -34,7 +34,7 @@ TS_BARS   = 6           # 15분봉 6개 (학습 라벨링용 90분)
 CUT_ENTRY = "14:30"
 CONFS     = [0.60, 0.62, 0.64]
 
-def run_wfa_scenario(df_feat, soxl_5m_d, soxs_5m_d, unique_weeks, fcols, conf_thr, label, mode):
+def run_wfa_scenario(df_feat, tqqq_5m_d, sqqq_5m_d, unique_weeks, fcols, conf_thr, label, mode):
     print(f"\n{'='*90}\n[{label}] conf>={conf_thr*100:.0f}% 시작 (라벨링: {mode})\n{'='*90}")
     t0   = time.time()
     cap  = INIT_CAP; peak = INIT_CAP; mdd = 0.0
@@ -97,10 +97,10 @@ def run_wfa_scenario(df_feat, soxl_5m_d, soxs_5m_d, unique_weeks, fcols, conf_th
             ps, pn, pl = p_s[i], p_n[i], p_l[i]
             # 어제 모델의 핵심: 확률 보정 (Stretching) 로직 재현
             if pl > pn and pl > ps:
-                gbdt_dirs.append("LONG_SOXL")
+                gbdt_dirs.append("LONG_TQQQ")
                 gbdt_confs.append(min(0.95, max(0.50, 0.50+(pl-0.333)*1.15)))
             elif ps > pn and ps > pl:
-                gbdt_dirs.append("SHORT_SOXS")
+                gbdt_dirs.append("SHORT_SQQQ")
                 gbdt_confs.append(min(0.95, max(0.50, 0.50+(ps-0.333)*1.15)))
             else:
                 gbdt_dirs.append("NONE"); gbdt_confs.append(0.50)
@@ -126,19 +126,19 @@ def run_wfa_scenario(df_feat, soxl_5m_d, soxs_5m_d, unique_weeks, fcols, conf_th
                 gbdt_dir  = row["gbdt_dir"]
                 gbdt_conf = float(row["gbdt_conf"])
 
-                if gbdt_dir not in ("LONG_SOXL","SHORT_SOXS") or gbdt_conf < conf_thr:
+                if gbdt_dir not in ("LONG_TQQQ","SHORT_SQQQ") or gbdt_conf < conf_thr:
                     b_idx += 1; continue
 
-                sym = "SOXL" if gbdt_dir=="LONG_SOXL" else "SOXS"
+                sym = "TQQQ" if gbdt_dir=="LONG_TQQQ" else "SQQQ"
                 
-                if sym == "SOXL":
+                if sym == "TQQQ":
                     entry_px = float(row["Close"])
                 else:
-                    d5_soxs = soxs_5m_d.get(d_str, pd.DataFrame())
-                    soxs_at_time = d5_soxs[d5_soxs["datetime"] <= cur_dt]
-                    if soxs_at_time.empty:
+                    d5_sqqq = sqqq_5m_d.get(d_str, pd.DataFrame())
+                    sqqq_at_time = d5_sqqq[d5_sqqq["datetime"] <= cur_dt]
+                    if sqqq_at_time.empty:
                         b_idx += 1; continue
-                    entry_px = float(soxs_at_time.iloc[-1]["Close"])
+                    entry_px = float(sqqq_at_time.iloc[-1]["Close"])
 
                 entry_px = round(entry_px + SLIP, 2)
                 shares   = int(cap / entry_px)
@@ -146,7 +146,7 @@ def run_wfa_scenario(df_feat, soxl_5m_d, soxs_5m_d, unique_weeks, fcols, conf_th
                     b_idx += 1; continue
 
                 # ── 3. 실전 5분봉 ATR Trailing 매매 ──
-                day5 = soxl_5m_d.get(d_str, pd.DataFrame()) if sym=="SOXL" else soxs_5m_d.get(d_str, pd.DataFrame())
+                day5 = tqqq_5m_d.get(d_str, pd.DataFrame()) if sym=="TQQQ" else sqqq_5m_d.get(d_str, pd.DataFrame())
                 if day5.empty:
                     b_idx += 1; continue
                 post5 = day5[day5["datetime"] > cur_dt]
@@ -263,18 +263,18 @@ def main():
     ml   = MLFeatureEngine()
 
     print("="*90+"\n📦 데이터 로드 (어제 환경 100% 재현)\n"+"="*90)
-    soxl_15m = lake.load_candles("SOXL","15m").sort_values("datetime").reset_index(drop=True)
+    tqqq_15m = lake.load_candles("TQQQ","15m").sort_values("datetime").reset_index(drop=True)
     soxx_60m = lake.load_candles("SOXX","60m").sort_values("datetime").reset_index(drop=True)
     nvda_15m = lake.load_candles("NVDA","15m").sort_values("datetime").reset_index(drop=True)
     qqq_15m  = lake.load_candles("QQQ","15m").sort_values("datetime").reset_index(drop=True)
     vixy_15m = lake.load_candles("VIXY","15m").sort_values("datetime").reset_index(drop=True)
     ief_15m  = lake.load_candles("IEF","15m").sort_values("datetime").reset_index(drop=True)
     
-    soxl_5m  = lake.load_candles("SOXL","5m").sort_values("datetime").reset_index(drop=True)
-    soxs_5m  = lake.load_candles("SOXS","5m").sort_values("datetime").reset_index(drop=True)
+    tqqq_5m  = lake.load_candles("TQQQ","5m").sort_values("datetime").reset_index(drop=True)
+    sqqq_5m  = lake.load_candles("SQQQ","5m").sort_values("datetime").reset_index(drop=True)
     
-    soxl_5m['time_str'] = pd.to_datetime(soxl_5m['datetime']).dt.strftime('%H:%M')
-    soxs_5m['time_str'] = pd.to_datetime(soxs_5m['datetime']).dt.strftime('%H:%M')
+    tqqq_5m['time_str'] = pd.to_datetime(tqqq_5m['datetime']).dt.strftime('%H:%M')
+    sqqq_5m['time_str'] = pd.to_datetime(sqqq_5m['datetime']).dt.strftime('%H:%M')
 
     # CrossAsset 피처 병합 (어제와 완전 동일한 로직)
     soxx_60m['ema20'] = soxx_60m['Close'].ewm(span=20, adjust=False).mean()
@@ -286,7 +286,7 @@ def main():
     soxx_feat = soxx_60m[['datetime'] + macro_cols].copy()
     soxx_feat['datetime_dt'] = pd.to_datetime(soxx_feat['datetime']) + pd.Timedelta(minutes=60)
 
-    df_feat_base = ml.extract_features(soxl_15m)
+    df_feat_base = ml.extract_features(tqqq_15m)
     df_feat_base['datetime_dt'] = pd.to_datetime(df_feat_base['datetime'])
 
     df_merged = pd.merge_asof(df_feat_base.sort_values('datetime_dt'),
@@ -298,10 +298,10 @@ def main():
                                   mk_ca(raw, sym).sort_values('datetime_dt'),
                                   on='datetime_dt', direction='backward')
 
-    df_merged['soxl_ret_20'] = df_merged['Close'].pct_change(20) * 100.0
-    df_merged['soxl_ret_5']  = df_merged['Close'].pct_change(5)  * 100.0
-    df_merged['soxl_vs_qqq_20'] = df_merged['soxl_ret_20'] - df_merged.get('qqq_ret_20', pd.Series(0.0, index=df_merged.index)).fillna(0)
-    df_merged['soxl_vs_qqq_5']  = df_merged['soxl_ret_5']  - df_merged.get('qqq_ret_5',  pd.Series(0.0, index=df_merged.index)).fillna(0)
+    df_merged['tqqq_ret_20'] = df_merged['Close'].pct_change(20) * 100.0
+    df_merged['tqqq_ret_5']  = df_merged['Close'].pct_change(5)  * 100.0
+    df_merged['tqqq_vs_qqq_20'] = df_merged['tqqq_ret_20'] - df_merged.get('qqq_ret_20', pd.Series(0.0, index=df_merged.index)).fillna(0)
+    df_merged['tqqq_vs_qqq_5']  = df_merged['tqqq_ret_5']  - df_merged.get('qqq_ret_5',  pd.Series(0.0, index=df_merged.index)).fillna(0)
     df_merged['panic_signal'] = (
         (df_merged.get('vixy_ret_1', pd.Series(0.0, index=df_merged.index)).fillna(0) > 0).astype(int) +
         (df_merged.get('ief_ret_1',  pd.Series(0.0, index=df_merged.index)).fillna(0) > 0).astype(int)
@@ -325,8 +325,8 @@ def main():
     print(f"📊 피처 개수: {len(fcols)}개 (CrossAsset 및 Panic Signal 완벽 복원)")
 
     # 5분봉 딕셔너리
-    soxl_5m_d = {d:g for d,g in soxl_5m.groupby(soxl_5m["datetime"].str[:10])}
-    soxs_5m_d = {d:g for d,g in soxs_5m.groupby(soxs_5m["datetime"].str[:10])}
+    tqqq_5m_d = {d:g for d,g in tqqq_5m.groupby(tqqq_5m["datetime"].str[:10])}
+    sqqq_5m_d = {d:g for d,g in sqqq_5m.groupby(sqqq_5m["datetime"].str[:10])}
 
     wks = sorted(df_feat["week_id"].unique())
     print(f"📅 총 {len(wks)}주 | OOS {len(wks)-ROLL_WKS}주")
@@ -335,13 +335,13 @@ def main():
     # 시나리오 A: FIXED 라벨링 (어제 방식)
     for conf in CONFS:
         lbl = f"A(FIXED)_Conf≥{int(conf*100)}%"
-        res = run_wfa_scenario(df_feat, soxl_5m_d, soxs_5m_d, wks, fcols, conf, lbl, mode="FIXED")
+        res = run_wfa_scenario(df_feat, tqqq_5m_d, sqqq_5m_d, wks, fcols, conf, lbl, mode="FIXED")
         all_res.append(summarize(res))
 
     # 시나리오 B: ATR 라벨링 (일치 방식)
     for conf in CONFS:
         lbl = f"B(ATR)_Conf≥{int(conf*100)}%"
-        res = run_wfa_scenario(df_feat, soxl_5m_d, soxs_5m_d, wks, fcols, conf, lbl, mode="ATR")
+        res = run_wfa_scenario(df_feat, tqqq_5m_d, sqqq_5m_d, wks, fcols, conf, lbl, mode="ATR")
         all_res.append(summarize(res))
 
     print("\n\n"+"="*90)

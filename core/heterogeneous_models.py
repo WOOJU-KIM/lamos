@@ -61,8 +61,8 @@ class OrderFlowImbalanceModel:
 
     def predict_signal(self, row: pd.Series) -> Tuple[int, float, str]:
         """
-        - 1: SOXL 롱 진입
-        - -1: SOXS 숏 진입
+        - 1: TQQQ 롱 진입
+        - -1: SQQQ 숏 진입
         - 0: 관망
         """
         cvd_z = row.get('CVD_Z', 0.0)
@@ -211,8 +211,8 @@ class StateSpaceKalmanModel:
 class CrossAssetDislocationModel:
     """
     [Track 5: 크로스에셋 인과 괴리 모델 (Cross-Asset Dislocation)]
-    - 수학적 원리: SOXL 차트 자체를 보지 않고, NVDA(선행 주도주), QQQ(나스닥), SOXX(반도체), ^TNX(금리), ^VIX의 선행 움직임 대비 SOXL 가격의 스프레드 지연 괴리(Lead-Lag Dislocation) 포착
-    - 시그널: 선행 자산군 동반 상승(NVDA 급등/TNX 하락/VIX 급락) 대비 SOXL이 뒤처질 때 가상 진입
+    - 수학적 원리: TQQQ 차트 자체를 보지 않고, NVDA(선행 주도주), QQQ(나스닥), SOXX(반도체), ^TNX(금리), ^VIX의 선행 움직임 대비 TQQQ 가격의 스프레드 지연 괴리(Lead-Lag Dislocation) 포착
+    - 시그널: 선행 자산군 동반 상승(NVDA 급등/TNX 하락/VIX 급락) 대비 TQQQ이 뒤처질 때 가상 진입
     """
     def __init__(self, dislocation_z_threshold: float = 1.6):
         self.z_threshold = dislocation_z_threshold
@@ -246,7 +246,7 @@ class CrossAssetDislocationModel:
 
     def predict_signal(
         self,
-        soxl_ret: float,
+        tqqq_ret: float,
         nvda_ret: float,
         soxx_ret: float,
         qqq_ret: float,
@@ -255,11 +255,11 @@ class CrossAssetDislocationModel:
         **kwargs
     ) -> Tuple[int, float, str]:
         """
-        선행 자산 대비 SOXL의 괴리(Spread Lag) 판별
-        - 위치 인자 순서 정규화: (soxl_ret, nvda_ret, soxx_ret, qqq_ret, vix_ret, tnx_ret)
+        선행 자산 대비 TQQQ의 괴리(Spread Lag) 판별
+        - 위치 인자 순서 정규화: (tqqq_ret, nvda_ret, soxx_ret, qqq_ret, vix_ret, tnx_ret)
         - 키워드 인자(Keyword Arguments) 완벽 지원 및 과거 시그니처 역호환 보장
         """
-        actual_soxl = kwargs.get('soxl_ret', soxl_ret)
+        actual_tqqq = kwargs.get('tqqq_ret', tqqq_ret)
         actual_nvda = kwargs.get('nvda_ret', nvda_ret)
         actual_soxx = kwargs.get('soxx_ret', soxx_ret)
         actual_qqq = kwargs.get('qqq_ret', qqq_ret)
@@ -267,8 +267,8 @@ class CrossAssetDislocationModel:
         actual_tnx = kwargs.get('tnx_ret', tnx_ret)
 
         # 🛡️ 단위 안전 방어: 퍼센트 단위(예: 1.5% -> 1.5) 전달 시 소수점(0.015)으로 자동 안전 정규화
-        if any(abs(r) > 0.5 for r in [actual_soxl, actual_nvda, actual_soxx, actual_qqq]):
-            actual_soxl /= 100.0
+        if any(abs(r) > 0.5 for r in [actual_tqqq, actual_nvda, actual_soxx, actual_qqq]):
+            actual_tqqq /= 100.0
             actual_nvda /= 100.0
             actual_soxx /= 100.0
             actual_qqq /= 100.0
@@ -282,12 +282,12 @@ class CrossAssetDislocationModel:
             vix_ret=actual_vix,
             tnx_ret=actual_tnx
         )
-        dislocation = macro_score * 3.0 - actual_soxl  # SOXL 3배 레버리지 감안 괴리율
+        dislocation = macro_score * 3.0 - actual_tqqq  # TQQQ 3배 레버리지 감안 괴리율
 
-        if dislocation >= 0.012:  # 선행 자산 대비 SOXL이 1.2% 이상 지연 저평가
+        if dislocation >= 0.012:  # 선행 자산 대비 TQQQ이 1.2% 이상 지연 저평가
             conf = min(0.95, 0.65 + dislocation * 15.0)
             return 1, conf, f"크로스에셋 상방 괴리 (선행스코어={macro_score*100:+.2f}%, 괴리={dislocation*100:+.2f}%)"
-        elif dislocation <= -0.012:  # 선행 자산 대비 SOXL이 과대평가 ➔ SOXS 유리
+        elif dislocation <= -0.012:  # 선행 자산 대비 TQQQ이 과대평가 ➔ SQQQ 유리
             conf = min(0.95, 0.65 + abs(dislocation) * 15.0)
             return -1, conf, f"크로스에셋 하방 괴리 (선행스코어={macro_score*100:+.2f}%, 괴리={dislocation*100:+.2f}%)"
 

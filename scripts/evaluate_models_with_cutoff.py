@@ -39,14 +39,14 @@ def run_cutoff_backtests():
     print("===========================================================================")
     
     data_lake = MarketDataLake()
-    soxl_15m = data_lake.load_candles("SOXL", "15m")
-    soxs_15m = data_lake.load_candles("SOXS", "15m")
+    tqqq_15m = data_lake.load_candles("TQQQ", "15m")
+    sqqq_15m = data_lake.load_candles("SQQQ", "15m")
     nvda_15m = data_lake.load_candles("NVDA", "15m")
     qqq_15m = data_lake.load_candles("QQQ", "15m")
     soxx_60m = data_lake.load_candles("SOXX", "60m")
-    soxl_60m = data_lake.load_candles("SOXL", "60m")
+    tqqq_60m = data_lake.load_candles("TQQQ", "60m")
     
-    print(f"📊 [데이터 레이크 로드 완료] SOXL 15m: {len(soxl_15m)}개, SOXS 15m: {len(soxs_15m)}개")
+    print(f"📊 [데이터 레이크 로드 완료] TQQQ 15m: {len(tqqq_15m)}개, SQQQ 15m: {len(sqqq_15m)}개")
 
     # 7대 모델 정의 및 초기 설정
     tracks_definition = [
@@ -181,14 +181,14 @@ def run_cutoff_backtests():
             exit_px = round(entry_px * (1.0 + (ret_pct / 100.0) + FEE_RATE), 2)
 
             exp = np.random.choice(experts_pool)
-            direction = "LONG_SOXL" if np.random.random() > 0.3 else "SHORT_SOXS"
+            direction = "LONG_TQQQ" if np.random.random() > 0.3 else "SHORT_SQQQ"
             reason = "TAKE_PROFIT" if is_win else ("STOP_LOSS" if np.random.random() > 0.3 else "TIME_STOP")
 
             all_trades_to_insert.append((
                 f"TRD_{mid}_{i+1:03d}",
                 mid,
                 name,
-                "SOXL" if "LONG" in direction else "SOXS",
+                "TQQQ" if "LONG" in direction else "SQQQ",
                 entry_px,
                 exit_px,
                 entry_time_str,

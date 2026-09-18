@@ -53,7 +53,7 @@ def run_cold_start_v5():
     # ----------------------------------------------------
     # [1단계: 7종 심볼 확장 데이터 레이크 과거 데이터 전수 수집]
     # ----------------------------------------------------
-    print("\n⏳ [1/6] 7종 심볼(SOXL, SOXS, SOXX, QQQ, NVDA, ^VIX, ^TNX) 과거 분봉 수집 및 적재...")
+    print("\n⏳ [1/6] 7종 심볼(TQQQ, SQQQ, SOXX, QQQ, NVDA, ^VIX, ^TNX) 과거 분봉 수집 및 적재...")
     harvest_res = data_lake.harvest_all_7_symbols_max()
     summary = data_lake.get_data_lake_summary()
     print(f"   ✅ 데이터 레이크 적재 완료: 총 {summary['total_candles']:,}개 캔들 ({summary['unique_symbols']}개 심볼)")
@@ -62,10 +62,10 @@ def run_cold_start_v5():
     # [2단계: 실전 메인 챔피언 및 골든 베이스라인 직렬화]
     # ----------------------------------------------------
     print("\n⏳ [2/6] Track 0: 실전 메인 챔피언 및 골든 베이스라인 모델 생성...")
-    soxl_15m = data_lake.load_candles("SOXL", "15m")
+    tqqq_15m = data_lake.load_candles("TQQQ", "15m")
     ml_engine = MLFeatureEngine(confidence_threshold=0.40)
-    soxl_feat = ml_engine.extract_features(soxl_15m)
-    trained_model, top_10, _ = ml_engine.train_and_select_top_features(soxl_feat)
+    tqqq_feat = ml_engine.extract_features(tqqq_15m)
+    trained_model, top_10, _ = ml_engine.train_and_select_top_features(tqqq_feat)
 
     registry.register_model(
         model_id="M-20260815-GOLDEN-V1",
@@ -171,7 +171,7 @@ def run_cold_start_v5():
 
 📦 **[1. 7종 확장 영구 분봉 데이터 레이크]**
 • **총 적재 캔들:** `{summary['total_candles']:,}개` 분봉 데이터
-• **수집 심볼 (7종):** `SOXL`, `SOXS`, `SOXX`, `QQQ`, `NVDA`, `^VIX`, `^TNX`
+• **수집 심볼 (7종):** `TQQQ`, `SQQQ`, `SOXX`, `QQQ`, `NVDA`, `^VIX`, `^TNX`
 • **일일 자동화:** 매일 05:10 KST 당일 분봉 누적 + 최신화 모델 자동 재학습
 
 📊 **[2. 6대 이종 모델 샌드박스 트랙 (수수료 0.25% 차감)]**

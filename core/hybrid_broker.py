@@ -86,7 +86,7 @@ class HybridUniversalBroker:
             "msg": f"{self.broker_name} {self.mode_str} 정상 연동 확인 완료"
         }
 
-    def get_stock_quote(self, symbol: str = "SOXL") -> Dict[str, Any]:
+    def get_stock_quote(self, symbol: str = "TQQQ") -> Dict[str, Any]:
         """실시간 호가 및 체결가 조회 (KIS 실시간 원장 / DataLake 실시간 틱 동기화)"""
         last_px = 120.74
         if self.is_simulation:
@@ -124,7 +124,7 @@ class HybridUniversalBroker:
     def get_overseas_deposit(self) -> Dict[str, Any]:
         """외화 예수금 및 주문가능금액 조회 (한투 OpenAPI)"""
         if self.is_simulation:
-            res = self.kis.inquire_deposit(ticker="SOXL", price=120.74)
+            res = self.kis.inquire_deposit(ticker="TQQQ", price=120.74)
             raw = res.get("raw", {})
             usd_avail = float(raw.get("ord_psbl_frcr_amt", 1540.83) or 1540.83)
             exrt = float(raw.get("exrt", 1402.5) or 1402.5)
@@ -153,7 +153,7 @@ class HybridUniversalBroker:
                     # 중복 종목 방지
                     if not any(item["symbol"] == h.get("ticker") for item in holdings):
                         holdings.append({
-                            "symbol": h.get("ticker", "SOXL"),
+                            "symbol": h.get("ticker", "TQQQ"),
                             "quantity": int(h.get("qty", 0)),
                             "holding_qty": int(h.get("qty", 0)),
                             "purchase_price": float(h.get("avg_price", 0.0)),

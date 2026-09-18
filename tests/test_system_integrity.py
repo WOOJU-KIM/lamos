@@ -19,7 +19,7 @@ class SystemIntegrityRegressionTest(unittest.TestCase):
     """
 
     def setUp(self):
-        self.moe = MoEMetaOrchestrator(confidence_threshold=0.62, gbdt_threshold=0.62, mode="hybrid_v3")
+        self.moe = MoEMetaOrchestrator(confidence_threshold=0.60, gbdt_threshold=0.60, mode="hybrid_v3")
         # 가상 15분봉 데이터 생성
         dates = pd.date_range("2026-08-24 09:30", periods=50, freq="15min")
         self.dummy_15m = pd.DataFrame({
@@ -31,15 +31,15 @@ class SystemIntegrityRegressionTest(unittest.TestCase):
         }, index=dates)
 
     def test_1_confidence_under_62_must_be_rejected(self):
-        """[인터락 1] Lumos V3 GBDT 확신도 62% 미달 시 무조건 매수 거부 (is_approved == False)"""
+        """[인터락 1] Lumos V3 GBDT 확신도 60% 미달 시 무조건 매수 거부 (is_approved == False)"""
         # 임의로 55% 수준의 데이터 주입
-        res = self.moe.evaluate_dual_filter_signal(self.dummy_15m, threshold=0.62)
-        if res.get("gating_confidence", 0.0) < 0.62:
+        res = self.moe.evaluate_dual_filter_signal(self.dummy_15m, threshold=0.60)
+        if res.get("gating_confidence", 0.0) < 0.60:
             self.assertFalse(
                 res["is_approved"],
-                f"🚨 [치명적 오류] 확신도({res.get('gating_confidence')})가 62% 미만인데 is_approved=True로 승인됨!"
+                f"🚨 [치명적 오류] 확신도({res.get('gating_confidence')})가 60% 미만인데 is_approved=True로 승인됨!"
             )
-        print("✅ [Test 1 통과] GBDT 기준 확신도 62% 미만 시 무조건 진입 차단 검증 완료")
+        print("✅ [Test 1 통과] GBDT 기준 확신도 60% 미만 시 무조건 진입 차단 검증 완료")
 
     def test_2_no_holdings_no_sell_orders(self):
         """[인터락 2] 실제 원장 잔고(holdings == 0)가 없으면 어떤 매도도 절대 발주 불가"""
@@ -93,7 +93,7 @@ class SystemIntegrityRegressionTest(unittest.TestCase):
         # daily_stoploss_count>=3 때문에 즉각 False를 반환하지 않고 로직을 타다가 WS stream 에러 등으로 False를 반환할 수 있으나
         # "🚫 [진입 차단]" 로그가 남지 않음을 검증하는 것이 정확함
         buy_res = runner._execute_buy_with_10s_chase(
-            symbol="SOXL",
+            symbol="TQQQ",
             target_qty=10,
             ref_price=30.0,
             moe_res={"gating_confidence": 0.8, "expert_desc": "Test"},
@@ -106,9 +106,9 @@ class SystemIntegrityRegressionTest(unittest.TestCase):
         print("✅ [Test 5 통과] 3-Out 서킷브레이커 영구 폐지 (신규 진입 차단 없음) 검증 완료")
 
     def test_6_hybrid_moe_single_trigger_logic(self):
-        """[인터락 6] Lumos V3 하이브리드 MoE (GBDT 62% 단일 트리거 + 크로스에셋 Veto 및 다중스크린 필수통과) 동작 무결성 검증"""
+        """[인터락 6] Lumos V3 하이브리드 MoE (GBDT 60% 단일 트리거 + 크로스에셋 Veto 및 다중스크린 필수통과) 동작 무결성 검증"""
         from unittest.mock import patch, MagicMock
-        moe_v3 = MoEMetaOrchestrator(confidence_threshold=0.62, gbdt_threshold=0.62, mode="hybrid_v3")
+        moe_v3 = MoEMetaOrchestrator(confidence_threshold=0.60, gbdt_threshold=0.60, mode="hybrid_v3")
         # cross_asset_model이 없을 수 있으므로 모의 객체 주입
         moe_v3.cross_asset_model = MagicMock()
         moe_v3.data_lake = MagicMock()
@@ -119,7 +119,7 @@ class SystemIntegrityRegressionTest(unittest.TestCase):
             with patch.object(moe_v3.cross_asset_model, 'predict_signal', return_value=(1, 0.70, "")):
                 with patch.object(moe_v3.gbdt_engine, 'extract_features', return_value=pd.DataFrame({"RSI_14": [50.0]})):
                     res = moe_v3.evaluate_dual_filter_signal(self.dummy_15m)
-                    self.assertEqual(res["direction"], "LONG_SOXL")
+                    self.assertEqual(res["direction"], "LONG_TQQQ")
                     self.assertTrue(res["is_approved"], "🚨 [치명적 오류] 단일 트리거 및 VETO 통과 조건이 충족되었으나 매수가 거부됨!")
 
         # 시나리오 2: GBDT LONG (70%), CrossAsset SHORT (역풍) ➔ VETO 차단
@@ -130,7 +130,7 @@ class SystemIntegrityRegressionTest(unittest.TestCase):
                     print("DEBUG RES:", res)
                     self.assertFalse(res["is_approved"], "🚨 [치명적 오류] 크로스에셋 역풍이 감지되었는데 VETO가 작동하지 않고 승인됨!")
 
-        print("✅ [Test 6 통과] Lumos V3 하이브리드 MoE (GBDT 62% 단일 트리거 + 크로스에셋 Veto 통과) 양방향 무결성 검증 완료")
+        print("✅ [Test 6 통과] Lumos V3 하이브리드 MoE (GBDT 60% 단일 트리거 + 크로스에셋 Veto 통과) 양방향 무결성 검증 완료")
 
     def test_7_time_synchronization_and_model_switching_integrity(self):
         """[인터락 7] 투자 진행 필수 체크리스트: 글로벌 시간 동기화(KST-NYT) 및 모델 스위칭 스케줄 무결성 검증"""

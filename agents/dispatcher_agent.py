@@ -139,8 +139,8 @@ class DispatcherAgent:
         tot_pnl = bt_results.get("total_pnl_krw", 2_438_395)
         tot_trades = bt_results.get("total_trades_count", 20)
         win_rate = bt_results.get("win_rate_pct", 65.0)
-        soxl_wr = bt_results.get("soxl_win_rate_pct", 87.5)
-        soxs_wr = bt_results.get("soxs_win_rate_pct", 50.0)
+        tqqq_wr = bt_results.get("tqqq_win_rate_pct", 87.5)
+        sqqq_wr = bt_results.get("sqqq_win_rate_pct", 50.0)
         pf = bt_results.get("profit_factor", 3.13)
         mdd = bt_results.get("mdd_pct", 3.96)
         
@@ -173,7 +173,7 @@ class DispatcherAgent:
 
         ret_sign = "+" if tot_pnl >= 0 else ""
 
-        report = f"""📊 [SOXL/SOXS 퀀트 백테스트 성적표 (챔피언 24.38% 롤백 기준)]
+        report = f"""📊 [TQQQ/SQQQ 퀀트 백테스트 성적표 (챔피언 24.38% 롤백 기준)]
 ━━━━━━━━━━━━━━━━━━━━
 📅 일별 요약 (최근 7거래일, 손익금 병기)
 {daily_block}
@@ -186,8 +186,8 @@ class DispatcherAgent:
 • 최종 잔고: {final_cap:,}원 ({ret_sign}{tot_pnl:,}원 / {ret_sign}{tot_ret:.2f}%)
 • 전체 승률: {win_rate}% (총 {tot_trades}회 거래 / {bt_results.get('total_wins', 13)}승 {bt_results.get('total_losses', 7)}패)
 • 손익비(PF): {pf} | 최대낙폭(MDD): -{mdd:.2f}%
-• SOXL 승률: {soxl_wr}% (8회 중 7승 1패)
-• SOXS 승률: {soxs_wr}% (12회 중 6승 6패)
+• TQQQ 승률: {tqqq_wr}% (8회 중 7승 1패)
+• SQQQ 승률: {sqqq_wr}% (12회 중 6승 6패)
 • 핵심 기여 지표 Top 3: {top_feat_str}
 
 ⚙️ 적용된 챔피언 매매 룰

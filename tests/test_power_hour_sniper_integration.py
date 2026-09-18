@@ -20,7 +20,7 @@ class TestPowerHourSniperDeepAudit(unittest.TestCase):
     """
     [Lumos 퀀트 시스템: 파워 아워 스나이퍼 실전 연동 전수 정밀 감사 테스트]
     1. 타임존(EDT/EST) 및 세션 전환(09:30~14:30 vs 14:30~15:30 vs 15:30~15:50 vs 15:50) 완벽 검증
-    2. SOXS 숏 진입 시 SOXL 가격이 아닌 실제 SOXS 가격 기준 TP/SL 산출 여부 검증
+    2. SQQQ 숏 진입 시 TQQQ 가격이 아닌 실제 SQQQ 가격 기준 TP/SL 산출 여부 검증
     3. 14:30 경계선에서 Phase 1 보유 포지션 존재 시 5m 중복 진입 방어 검증
     4. 웹소켓 시세 120.74 하드코딩 제거 및 REST 폴백 동작 검증
     5. 데이터레이크 실시간 틱 병합 시 뉴욕 현지 시각(EDT) 일치 여부 검증
@@ -89,19 +89,19 @@ class TestPowerHourSniperDeepAudit(unittest.TestCase):
         self.assertEqual(s["session_name"], "AFTER_MARKET_CLOSED")
         print("✅ [감사 1 통과] 뉴욕 증시 4대 세션 경계값 및 타임존 완벽 일치")
 
-    def test_2_soxs_target_calculation_accuracy(self):
-        """[감사 2] SHORT_SOXS 선정 시 SOXL 가격이 아닌 실제 SOXS 가격 기준 TP/SL 산출 검증"""
+    def test_2_sqqq_target_calculation_accuracy(self):
+        """[감사 2] SHORT_SQQQ 선정 시 TQQQ 가격이 아닌 실제 SQQQ 가격 기준 TP/SL 산출 검증"""
         sniper = PowerHourSniper(tp_pct=0.025, sl_pct=0.0167, time_stop_minutes=30, confidence_threshold=0.55)
-        # SOXS 현재가 $20.00 주입
-        soxs_cur_px = 20.00
-        tp_px = round(soxs_cur_px * (1 + sniper.tp_pct), 2)
-        sl_px = round(soxs_cur_px * (1 - sniper.sl_pct), 2)
+        # SQQQ 현재가 $20.00 주입
+        sqqq_cur_px = 20.00
+        tp_px = round(sqqq_cur_px * (1 + sniper.tp_pct), 2)
+        sl_px = round(sqqq_cur_px * (1 - sniper.sl_pct), 2)
 
-        # 검증: TP는 20.50, SL은 19.67 이어야 함 (SOXL 120달러대가 아니어야 함)
+        # 검증: TP는 20.50, SL은 19.67 이어야 함 (TQQQ 120달러대가 아니어야 함)
         self.assertEqual(tp_px, 20.50)
         self.assertEqual(sl_px, 19.67)
         self.assertLess(tp_px, 30.00)
-        print("✅ [감사 2 통과] SOXS 숏 진입 시 실제 SOXS 가격 기준 동적 TP/SL 산출 무결성 검증 완료")
+        print("✅ [감사 2 통과] SQQQ 숏 진입 시 실제 SQQQ 가격 기준 동적 TP/SL 산출 무결성 검증 완료")
 
     def test_3_websocket_no_hardcoded_default_price(self):
         """[감사 3] 웹소켓 시세 엔진에서 120.74 하드코딩 제거 및 브로커 REST 폴백 정상 작동 검증"""
@@ -118,9 +118,9 @@ class TestPowerHourSniperDeepAudit(unittest.TestCase):
     def test_4_data_lake_live_tick_timezone_consistency(self):
         """[감사 4] 실시간 틱 병합 시 캔들 타임스탬프가 KST(한국)가 아닌 미국 뉴욕 정규장 시간대와 일치하는지 검증"""
         dl = MarketDataLake()
-        soxl_5m = dl.load_candles("SOXL", "5m")
-        if not soxl_5m.empty:
-            merged = dl.get_candles_with_live_tick("SOXL", "5m", live_price=122.50)
+        tqqq_5m = dl.load_candles("TQQQ", "5m")
+        if not tqqq_5m.empty:
+            merged = dl.get_candles_with_live_tick("TQQQ", "5m", live_price=122.50)
             last_candle_dt = merged.index[-1]
             # 시간대가 뉴욕 기준이므로, 뉴욕 현재 시각과의 차이가 24시간 이내여야 함
             ny_tz = ZoneInfo("America/New_York")
@@ -140,7 +140,7 @@ class TestPowerHourSniperDeepAudit(unittest.TestCase):
         runner = KiwoomLiveRunner(is_simulation=True)
         # Phase 1 포지션 주입
         pos = {
-            "symbol": "SOXL",
+            "symbol": "TQQQ",
             "quantity": 100,
             "price": 120.0,
             "buy_time": "2026-09-11 14:25:00",
@@ -176,19 +176,19 @@ class TestPowerHourSniperDeepAudit(unittest.TestCase):
             "Open": [100.0] * 30, "High": [101.0] * 30, "Low": [99.0] * 30, "Close": [100.5] * 30, "Volume": [10000] * 30
         })
 
-        # 시나리오 1: 5분봉 GBDT는 LONG_SOXL (65%)이나, 크로스에셋이 SHORT_SOXS (-1) 역풍 경고 -> VETO 차단
+        # 시나리오 1: 5분봉 GBDT는 LONG_TQQQ (65%)이나, 크로스에셋이 SHORT_SQQQ (-1) 역풍 경고 -> VETO 차단
         with patch.object(sniper.model, 'predict_proba', return_value=[[0.10, 0.25, 0.65]]):
             with patch.object(sniper.cross_asset_model, 'predict_signal', return_value=(-1, 0.70, "NVDA 급락 괴리")):
                 res = sniper.evaluate_sniper_signal(dummy_5m)
-                self.assertEqual(res["direction"], "LONG_SOXL")
+                self.assertEqual(res["direction"], "LONG_TQQQ")
                 self.assertTrue(res["is_cross_veto"], "🚨 크로스에셋 정반대 신호인데 Veto되지 않음!")
                 self.assertFalse(res["is_approved"], "🚨 Veto 상태인데 진입이 승인됨!")
 
-        # 시나리오 2: 5분봉 GBDT LONG_SOXL (65%) & 크로스에셋 중립 (0) -> VETO 없음 (통과)
+        # 시나리오 2: 5분봉 GBDT LONG_TQQQ (65%) & 크로스에셋 중립 (0) -> VETO 없음 (통과)
         with patch.object(sniper.model, 'predict_proba', return_value=[[0.10, 0.25, 0.65]]):
             with patch.object(sniper.cross_asset_model, 'predict_signal', return_value=(0, 0.50, "정렬")):
                 res = sniper.evaluate_sniper_signal(dummy_5m)
-                self.assertEqual(res["direction"], "LONG_SOXL")
+                self.assertEqual(res["direction"], "LONG_TQQQ")
                 self.assertFalse(res["is_cross_veto"])
 
         print("✅ [감사 6 통과] Phase 2 5분봉 스나이퍼 크로스에셋 Veto 방패 무결성 검증 완료")

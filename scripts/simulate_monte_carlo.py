@@ -35,7 +35,7 @@ def run_monte_carlo_analysis(n_simulations: int = 20000, initial_capital: float 
     print("🎲 [Lumos 퀀트 트레이딩 모델 몬테카를로 리스크 & 파산 확률 정밀 분석 보고서]")
     print("=" * 105)
     print(f"📊 [입력 데이터 기초 통계 (data/trade_logs.csv 기준)]")
-    print(f"- 총 백테스트 표본: {len(df)}회 거래 (SOXL/SOXS)")
+    print(f"- 총 백테스트 표본: {len(df)}회 거래 (TQQQ/SQQQ)")
     print(f"- 현재 모델 승률: {current_win_rate * 100:.2f}% ({len(wins)}승 / {len(losses)}패)")
     print(f"- 승리 시 평균 수익률: {avg_win * 100:+.2f}% (최대 +3.00%)")
     print(f"- 패배 시 평균 손실률: {avg_loss * 100:+.2f}% (최대 -2.00%)")

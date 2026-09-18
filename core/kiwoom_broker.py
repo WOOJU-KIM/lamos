@@ -428,7 +428,7 @@ class KiwoomBroker:
 
         return self._cached_summary
 
-    def get_stock_quote(self, symbol: str = "SOXL", exchange: Optional[str] = None) -> Dict[str, Any]:
+    def get_stock_quote(self, symbol: str = "TQQQ", exchange: Optional[str] = None) -> Dict[str, Any]:
         """
         [TR: ust10000 / 실시간 피드] 미국주식 현재가 및 시세 조회
         """
@@ -468,7 +468,7 @@ class KiwoomBroker:
         """
         [공식 TR: ust20000 (미국주식 매수) / ust20001 (미국주식 매도)]
         - 엔드포인트: POST /api/us/ordr
-        - 거래소 구분(stex_tp): SOXL/SOXS는 "NY" (NYSE Arca), NVDA/QQQ는 "ND" (NASDAQ)
+        - 거래소 구분(stex_tp): TQQQ/SQQQ는 "NY" (NYSE Arca), NVDA/QQQ는 "ND" (NASDAQ)
         - 키움 모의투자 규격: 지정가("00") 필수 적용
         - 🚨 실패/에러 발생 시 절대 삼키지 않고 즉시 RuntimeError를 발생시킴
         """
@@ -476,7 +476,7 @@ class KiwoomBroker:
         api_id = "ust20000" if is_buy else "ust20001"
         sym_clean = symbol.upper().strip()
 
-        # 거래소 코드 자동 매핑 (SOXL/SOXS: NY, NVDA/QQQ: ND)
+        # 거래소 코드 자동 매핑 (TQQQ/SQQQ: NY, NVDA/QQQ: ND)
         stex = exchange or ("NY" if sym_clean in ["SOXL", "SOXS", "SPY", "DIA", "VIXY"] else "ND")
 
         # 현재가 조회
@@ -676,13 +676,13 @@ class KiwoomBroker:
 
         return cancel_results
 
-    def test_full_trading_pipeline(self, symbol: str = "SOXL") -> Dict[str, Any]:
+    def test_full_trading_pipeline(self, symbol: str = "TQQQ") -> Dict[str, Any]:
         """
         [키움증권 미국주식 매매 전 주기 6대 파이프라인 E2E 무결성 검증]
         1. OAuth2 인증 및 토큰 발급
         2. 외화 예수금(ust21110) 실시간 조회
         3. 주식 원장 잔고(ust21070) 실시간 조회
-        4. 실시간 주가/시세 수신 (SOXL)
+        4. 실시간 주가/시세 수신 (TQQQ)
         5. 매수 주문(tt80010) 신호 송수신 검증
         6. 미체결 주문(ust21080) 및 계좌 잔고 무결성 확인
         """
@@ -792,6 +792,6 @@ if __name__ == "__main__":
     print("=" * 75)
     print("🚀 [키움증권 미국주식 매매 송수신 전 주기 파이프라인 점검 테스트] 🚀")
     print("=" * 75)
-    res = broker.test_full_trading_pipeline("SOXL")
+    res = broker.test_full_trading_pipeline("TQQQ")
     print(json.dumps(res, indent=2, ensure_ascii=False))
 

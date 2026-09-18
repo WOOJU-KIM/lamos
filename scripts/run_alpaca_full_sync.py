@@ -23,7 +23,7 @@ load_dotenv(PROJECT_ROOT / ".env")
 from config import DATA_DIR
 
 DB_PATH = DATA_DIR / "market_data.db"
-SYMBOLS = ["SOXL", "SOXS", "SOXX", "NVDA", "QQQ", "VIXY", "IEF"]
+SYMBOLS = ["SOXL", "SOXS", "TQQQ", "SQQQ", "SOXX", "NVDA", "QQQ", "VIXY", "IEF"]
 TIMEFRAMES = [("15m", "15Min"), ("5m", "5Min"), ("60m", "1Hour")]
 
 def fetch_alpaca_history(symbol: str, alpaca_tf: str, start_dt: str, end_dt: str):

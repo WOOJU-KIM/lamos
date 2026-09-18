@@ -74,7 +74,7 @@ def fetch_alpaca_bars_full(symbol: str, timeframe: str, start_dt: str, end_dt: s
 
 def compare_dataset():
     lake = MarketDataLake()
-    symbols = ["SOXL", "NVDA", "QQQ", "SOXX", "SOXS"]
+    symbols = ["TQQQ", "NVDA", "QQQ", "SOXX", "SQQQ"]
     timeframe = "15m"
     
     print("=" * 85)
