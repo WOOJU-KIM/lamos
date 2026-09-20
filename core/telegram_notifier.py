@@ -1,3 +1,5 @@
+import config
+from core.system_logger import system_logger
 """
 ================================================================================
 Lumos V3 Hybrid MoE 실시간 텔레그램 모니터링 알림 파이프라인 (TelegramNotifier)
@@ -284,24 +286,24 @@ class TelegramNotifier:
 # 🧪 자가 테스트 및 데모 시뮬레이션
 # ==============================================================================
 if __name__ == "__main__":
-    print("=" * 80)
-    print("🏛 [Lumos V3 Hybrid MoE 실시간 텔레그램 알림 파이프라인 데모]")
-    print("=" * 80)
+    system_logger.info("=" * 80)
+    system_logger.info("🏛 [Lumos V3 Hybrid MoE 실시간 텔레그램 알림 파이프라인 데모]")
+    system_logger.info("=" * 80)
 
     # 콘솔 시뮬레이션 모드로 생성하여 터미널 포맷 출력만 확인 (사용자 텔레그램 발송 차단)
     notifier = TelegramNotifier(bot_token="", chat_id="", async_mode=False)
 
-    print("\n1. 🛡️ [Type 1: Veto 방어 알림 시뮬레이션]")
+    system_logger.info("\n1. 🛡️ [Type 1: Veto 방어 알림 시뮬레이션]")
     res1 = notifier.send_veto_alert(
-        ticker="TQQQ",
+        ticker=config.TICKER_LONG,
         gbdt_prob=58.4,
-        cross_dir="SHORT_SQQQ"
+        cross_dir=f"SHORT_{config.TICKER_SHORT}"
     )
-    print(res1["text"])
+    system_logger.info(res1["text"])
 
-    print("\n2. ⚡ [Type 2: 자율 매수 체결 알림 시뮬레이션]")
+    system_logger.info("\n2. ⚡ [Type 2: 자율 매수 체결 알림 시뮬레이션]")
     res2 = notifier.send_entry_alert(
-        ticker="TQQQ",
+        ticker=config.TICKER_LONG,
         entry_price=42.50,
         qty=120,
         gbdt_prob=62.5,
@@ -310,48 +312,48 @@ if __name__ == "__main__":
         sl_price=41.65,
         time_stop_time="00:00:00"
     )
-    print(res2["text"])
+    system_logger.info(res2["text"])
 
-    print("\n3. 🎯 [Type 3-A: 목표가 +3.0% 익절 청산 알림 시뮬레이션]")
+    system_logger.info("\n3. 🎯 [Type 3-A: 목표가 +3.0% 익절 청산 알림 시뮬레이션]")
     res3a = notifier.send_exit_alert(
-        ticker="TQQQ",
+        ticker=config.TICKER_LONG,
         entry_price=42.50,
         exit_price=43.78,
         exit_reason="목표가 +3.0% 도달",
         qty=120
     )
-    print(res3a["text"])
+    system_logger.info(res3a["text"])
 
-    print("\n4. ✂️ [Type 3-B: -2.0% 칼손절 청산 알림 시뮬레이션]")
+    system_logger.info("\n4. ✂️ [Type 3-B: -2.0% 칼손절 청산 알림 시뮬레이션]")
     res3b = notifier.send_exit_alert(
-        ticker="TQQQ",
+        ticker=config.TICKER_LONG,
         entry_price=42.50,
         exit_price=41.60,
         exit_reason="-2.0% 칼손절",
         qty=120
     )
-    print(res3b["text"])
+    system_logger.info(res3b["text"])
 
-    print("\n5. ⏱️ [Type 3-C: 90분 타임스탑 청산 알림 시뮬레이션]")
+    system_logger.info("\n5. ⏱️ [Type 3-C: 90분 타임스탑 청산 알림 시뮬레이션]")
     res3c = notifier.send_exit_alert(
-        ticker="SQQQ",
+        ticker=config.TICKER_SHORT,
         entry_price=20.00,
         exit_price=20.10,
         exit_reason="90분 타임스탑",
         qty=250
     )
-    print(res3c["text"])
+    system_logger.info(res3c["text"])
 
-    print("\n6. 🌙 [Type 3-D: 종가 오버나잇 방지 전량 청산 알림 시뮬레이션]")
+    system_logger.info("\n6. 🌙 [Type 3-D: 종가 오버나잇 방지 전량 청산 알림 시뮬레이션]")
     res3d = notifier.send_exit_alert(
-        ticker="TQQQ",
+        ticker=config.TICKER_LONG,
         entry_price=42.50,
         exit_price=42.80,
         exit_reason="종가 오버나잇 방지",
         qty=120
     )
-    print(res3d["text"])
+    system_logger.info(res3d["text"])
 
-    print("\n" + "=" * 80)
-    print("✅ [검증 완료] 3대 카테고리 알림 템플릿 정상 포맷팅 및 파이프라인 검증 성공")
-    print("=" * 80)
+    system_logger.info("\n" + "=" * 80)
+    system_logger.info("✅ [검증 완료] 3대 카테고리 알림 템플릿 정상 포맷팅 및 파이프라인 검증 성공")
+    system_logger.info("=" * 80)

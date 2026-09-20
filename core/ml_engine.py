@@ -1,10 +1,12 @@
 from config import GBDT_CONFIDENCE_THRESHOLD
+import config
 import warnings
 import numpy as np
 import pandas as pd
 from typing import Dict, Any, List, Tuple, Optional
 from lightgbm import LGBMClassifier
 from sklearn.ensemble import RandomForestClassifier
+from core.system_logger import system_logger
 
 warnings.filterwarnings('ignore')
 
@@ -46,6 +48,12 @@ class MLFeatureEngine:
                         self.feature_names = getattr(obj.gbdt_engine, "feature_names", [])
                         self.top_10_features = getattr(obj.gbdt_engine, "top_10_features", [])
                         self.top_3_features = getattr(obj.gbdt_engine, "top_3_features", [])
+                        break
+                    elif type(obj).__name__ == "LGBMClassifier":
+                        self.model = obj
+                        self.feature_names = getattr(obj, "feature_name_", [])
+                        self.top_10_features = []
+                        self.top_3_features = []
                         break
                 except Exception:
                     pass
@@ -186,92 +194,19 @@ class MLFeatureEngine:
         df['Lower_Wick_Ratio'] = (df[['Open', 'Close']].min(axis=1) - df['Low']) / candle_range
 
 
-        # [6. 크로스에셋 및 매크로 피처 (V4)]
-        if 'datetime_dt' not in df.columns:
-            if isinstance(df.index, pd.DatetimeIndex):
-                df['datetime_dt'] = df.index + pd.Timedelta(minutes=15)
-            elif 'datetime' in df.columns:
-                df['datetime_dt'] = pd.to_datetime(df['datetime']) + pd.Timedelta(minutes=15)
-            elif 'Datetime' in df.columns:
-                df['datetime_dt'] = pd.to_datetime(df['Datetime']) + pd.Timedelta(minutes=15)
-
-        try:
-            from core.data_lake import MarketDataLake
-            lake = MarketDataLake()
-            
-            # SOXX (대추세 60분봉)
-            soxx_live = live_prices.get("SOXX", 0.0) if live_prices else 0.0
-            if soxx_live > 0:
-                soxx_60m = lake.get_candles_with_live_tick("SOXX", "60m", live_price=soxx_live)
-            else:
-                soxx_60m = lake.load_candles("SOXX", "60m")
-            if not soxx_60m.empty:
-                soxx_60m['ema20'] = soxx_60m['Close'].ewm(span=20, adjust=False).mean()
-                soxx_60m['ema60'] = soxx_60m['Close'].ewm(span=60, adjust=False).mean()
-                soxx_60m['macro_trend_spread'] = (soxx_60m['ema20'] - soxx_60m['ema60']) / (soxx_60m['ema60'] + 1e-9) * 100.0
-                soxx_60m['macro_ema20_slope'] = (soxx_60m['ema20'].diff(5) / soxx_60m['ema20'].shift(5)) * 100.0
-                soxx_60m['macro_price_vs_ema20'] = (soxx_60m['Close'] - soxx_60m['ema20']) / (soxx_60m['ema20'] + 1e-9) * 100.0
-                soxx_feat = soxx_60m[['datetime', 'macro_trend_spread', 'macro_ema20_slope', 'macro_price_vs_ema20']].copy()
-                soxx_feat['datetime_dt'] = pd.to_datetime(soxx_feat['datetime']) + pd.Timedelta(minutes=60)
-                
-                df = pd.merge_asof(df.sort_values('datetime_dt'), 
-                                   soxx_feat.sort_values('datetime_dt').drop(columns=['datetime']), 
-                                   on='datetime_dt', direction='backward')
-
-            # V4 크로스에셋 종목 (15분봉)
-            for sym in ['NVDA', 'QQQ', 'VIXY', 'IEF']:
-                lp = live_prices.get(sym, 0.0) if live_prices else 0.0
-                if lp > 0:
-                    sym_raw = lake.get_candles_with_live_tick(sym, "15m", live_price=lp)
-                else:
-                    sym_raw = lake.load_candles(sym, "15m")
-                if not sym_raw.empty:
-                    sym_raw['datetime_dt'] = pd.to_datetime(sym_raw['datetime']) + pd.Timedelta(minutes=15)
-                    lower_sym = sym.lower()
-                    for p in [1, 3, 5, 20]:
-                        sym_raw[f'{lower_sym}_ret_{p}'] = sym_raw['Close'].pct_change(p) * 100.0
-                    sym_raw[f'{lower_sym}_dir_1'] = np.sign(sym_raw['Close'].pct_change(1))
-                    sym_raw[f'{lower_sym}_momentum'] = sym_raw['Close'].pct_change(1) - sym_raw['Close'].pct_change(5) / 5.0
-                    
-                    cols_to_merge = ['datetime_dt'] + [c for c in sym_raw.columns if c.startswith(lower_sym)]
-                    df = pd.merge_asof(df.sort_values('datetime_dt'), 
-                                       sym_raw[cols_to_merge].sort_values('datetime_dt'), 
-                                       on='datetime_dt', direction='backward')
-                    
-            # 패닉 시그널 및 상대 강도 파생 변수
-            df['tqqq_ret_20'] = df['Close'].pct_change(20) * 100.0
-            df['tqqq_ret_5'] = df['Close'].pct_change(5) * 100.0
-            df['tqqq_vs_qqq_20'] = df['tqqq_ret_20'] - df.get('qqq_ret_20', pd.Series(0.0, index=df.index)).fillna(0)
-            df['tqqq_vs_qqq_5'] = df['tqqq_ret_5'] - df.get('qqq_ret_5', pd.Series(0.0, index=df.index)).fillna(0)
-            df['panic_signal'] = (
-                (df.get('vixy_ret_1', pd.Series(0.0, index=df.index)).fillna(0) > 0).astype(int) + 
-                (df.get('ief_ret_1', pd.Series(0.0, index=df.index)).fillna(0) > 0).astype(int)
-            )
-            
-            # 후속 로직(결측치)을 위해 다시 시간순 정렬 유지
-            df = df.sort_values('datetime_dt').reset_index(drop=True)
-            
-        except Exception as e:
-            print(f"[MLFeatureEngine] 크로스에셋 병합 실패 (오프라인 모드): {e}")
-
-        if 'datetime' in df.columns:
-            df.index = pd.to_datetime(df['datetime'])
-        elif 'Datetime' in df.columns:
-            df.index = pd.to_datetime(df['Datetime'])
-            
         return df
 
     @staticmethod
     def compute_triple_barrier_labels(
         df: pd.DataFrame,
-        take_profit: float = 0.030,
-        stop_loss: float = 0.020,
-        horizon: int = 6
+        take_profit: float = config.ML_TARGET_TP_PCT,
+        stop_loss: float = config.ML_TARGET_SL_PCT,
+        horizon: int = config.ML_HORIZON_BARS
     ) -> pd.Series:
         """
-        [경로 의존적 Triple Barrier 3-Class 정답지 산출]
-        - Class 1 (TQQQ 롱): 90분(6개 봉) 내 Low가 -2.0%에 닿기 전에 High가 +3.0%를 먼저 터치
-        - Class -1 (SQQQ 숏): 90분(6개 봉) 내 High가 +2.0%에 닿기 전에 Low가 -3.0%를 먼저 터치 (TQQQ 하락)
+        [  Triple Barrier 3-Class  ]
+        - Class 1 ({config.NAME_LONG} ): 60(4 )  Low -0.8%   High +1.2%  ġ
+        - Class -1 ({config.NAME_SHORT} ): 60(4 )  High +0.8%   Low -1.2%  ġ (LONG_ETF ϶)하락)
         - Class 0 (관망): 6개 봉 내 양방향 타겟 미도달 (타임스탑 청산 또는 횡보)
         """
         n = len(df)
@@ -302,11 +237,11 @@ class MLFeatureEngine:
                 hit_short_sl = (h_ret >= stop_loss)
 
                 if hit_long_tp and not hit_long_sl:
-                    labels[i] = 1   # TQQQ 롱 승리
+                    labels[i] = 1   # {config.NAME_LONG} 롱 승리
                     assigned = True
                     break
                 elif hit_short_tp and not hit_short_sl:
-                    labels[i] = -1  # SQQQ 숏 승리
+                    labels[i] = -1  # {config.NAME_SHORT} 숏 승리
                     assigned = True
                     break
                 elif (hit_long_sl and hit_short_sl) or (hit_long_tp and hit_long_sl) or (hit_short_tp and hit_short_sl):
@@ -328,9 +263,9 @@ class MLFeatureEngine:
 
         feat_df['Target'] = self.compute_triple_barrier_labels(
             feat_df,
-            take_profit=0.030,
-            stop_loss=0.020,
-            horizon=6
+            take_profit=config.ML_TARGET_TP_PCT,
+            stop_loss=config.ML_TARGET_SL_PCT,
+            horizon=config.ML_HORIZON_BARS
         )
 
         clean_data = feat_df[feature_cols + ['Target']].dropna()
@@ -374,12 +309,12 @@ class MLFeatureEngine:
                 except Exception:
                     continue
 
-                sym = str(row.get("symbol", "TQQQ")).upper()
+                sym = str(row.get("symbol", config.TICKER_LONG)).upper()
                 reason = str(row.get("exit_reason", "")).upper()
                 pnl = float(row.get("pnl_pct", 0.0))
 
                 # 라벨 결정: 2(Long TP), 0(Short TP), 1(중립/타임스탑)
-                if sym == "TQQQ":
+                if sym == config.TICKER_LONG:
                     tgt = 2 if ("TP" in reason or pnl >= 2.0) else (0 if ("SL" in reason or pnl <= -1.5) else 1)
                 else:
                     tgt = 0 if ("TP" in reason or pnl >= 2.0) else (2 if ("SL" in reason or pnl <= -1.5) else 1)
@@ -396,7 +331,7 @@ class MLFeatureEngine:
                 X = pd.concat([X, X_live], ignore_index=True)
                 y = pd.concat([y, y_live], ignore_index=True)
                 sample_weights = pd.concat([sample_weights, weights_live], ignore_index=True)
-                print(f"[MLFeatureEngine] 🧬 과거 캔들 {len(clean_data):,}개 + 실시간 실전 거래 {len(live_rows):,}개 (2.5x 가중치) 통합 학습 적용 완료")
+                system_logger.info(f"[MLFeatureEngine] 🧬 과거 캔들 {len(clean_data):,}개 + 실시간 실전 거래 {len(live_rows):,}개 (2.5x 가중치) 통합 학습 적용 완료")
 
         try:
             model = LGBMClassifier(
@@ -465,12 +400,12 @@ class MLFeatureEngine:
                     # 3-Class Calibration: 33.3% 기준선 -> 50%~95% 스케일링
                     calib_conf = min(0.95, max(0.50, 0.50 + (pl - 0.333) * 1.15))
                     confidences[idx] = calib_conf
-                    directions[idx] = "LONG_TQQQ"
+                    directions[idx] = f"LONG_{config.TICKER_LONG}"
                 elif ps > pn and ps > pl:
                     signals[idx] = -1
                     calib_conf = min(0.95, max(0.50, 0.50 + (ps - 0.333) * 1.15))
                     confidences[idx] = calib_conf
-                    directions[idx] = "SHORT_SQQQ"
+                    directions[idx] = f"SHORT_{config.TICKER_SHORT}"
                 else:
                     signals[idx] = 0
                     confidences[idx] = pn
@@ -513,8 +448,22 @@ class MLFeatureEngine:
         p_short = float(last_row.get("Prob_Short", 0.33))
 
         if sig == 1:
-            return 1, conf, f"GBDT 3-Class TQQQ 롱 파형 포착 (P_Long={p_long*100:.1f}%, Conf={conf*100:.1f}%)"
+            return 1, conf, f"GBDT 3-Class {config.NAME_LONG} 롱 파형 포착 (P_Long={p_long*100:.1f}%, Conf={conf*100:.1f}%)"
         elif sig == -1:
-            return -1, conf, f"GBDT 3-Class SQQQ 숏 파형 포착 (P_Short={p_short*100:.1f}%, Conf={conf*100:.1f}%)"
+            return -1, conf, f"GBDT 3-Class {config.NAME_SHORT} 숏 파형 포착 (P_Short={p_short*100:.1f}%, Conf={conf*100:.1f}%)"
 
         return 0, conf, "GBDT 관망/중립 상태"
+
+    def predict_signal_full(self, df_candle_15m: pd.DataFrame) -> Tuple[int, float, str, Dict[str, float]]:
+        sig, conf, reason = self.predict_signal(df_candle_15m)
+        df_feat = self.extract_features(df_candle_15m)
+        if df_feat.empty:
+            return sig, conf, reason, {"LONG": 0.33, "SHORT": 0.33, "NONE": 0.34}
+        df_feat = self.add_confidence_columns(df_feat)
+        last_row = df_feat.iloc[-1]
+        probs = {
+            "LONG": float(last_row.get("Prob_Long", 0.33)),
+            "SHORT": float(last_row.get("Prob_Short", 0.33)),
+            "NONE": float(last_row.get("Prob_Neutral", 0.34))
+        }
+        return sig, conf, reason, probs

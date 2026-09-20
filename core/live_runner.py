@@ -117,27 +117,27 @@ class USMarketCalendar:
         if is_weekend:
             day_name_kr = "Weekend"
             session_name = "WEEKEND_CLOSED"
-            status_desc = f"? ?   ? ({day_name_kr}?)"
+            status_desc = f"주말 장 휴장 ({day_name_kr})"
         elif not is_regular_hours:
             if ny_time < market_open_time:
                 session_name = "PRE_MARKET_WAITING"
-                status_desc = "????? ??? ??"
+                status_desc = "정규장 개장 대기 중"
             else:
                 session_name = "AFTER_MARKET_CLOSED"
-                status_desc = "? ??? (???"
+                status_desc = "장 마감 (애프터마켓)"
         else:
             if is_eod_liquidation_window:
                 session_name = "EOD_LIQUIDATION"
-                status_desc = "???? 10??? 0% ?? ? ??????"
+                status_desc = "장마감 10분전 0% 오버나잇 청산 모드"
             elif is_trading_allowed:
                 session_name = "REGULAR_MARKET_OPEN"
-                status_desc = "? ? ???Phase 1 ???  ?(15m Model C)"
+                status_desc = "정규장 진행중 Phase 1 (15m Model C)"
             elif is_phase2_allowed:
                 session_name = "POWER_HOUR_SNIPER"
-                status_desc = "??? ???Phase 2 ? ? ??  ?(5m Sniper)"
+                status_desc = "정규장 진행중 Phase 2 (5m Sniper)"
             else:
                 session_name = "REGULAR_MARKET_NO_ENTRY"
-                status_desc = "???? ??(?  ,  ?????"
+                status_desc = "정규장 진입 금지 시간 (관망)"
 
         is_dst = bool(now_ny.dst())
 
@@ -489,9 +489,9 @@ class KiwoomLiveRunner:
 
             pnl_pct = (price - buy_px) / buy_px
 
-            tp_threshold = float(active_pos.get("tp_pct", 3.0)) / 100.0 if active_pos.get("tp_pct") else 0.030
-            sl_threshold = float(active_pos.get("sl_pct", 2.0)) / 100.0 if active_pos.get("sl_pct") else 0.020
-            time_stop_minutes = float(active_pos.get("time_stop_minutes", 90))
+            tp_threshold = float(active_pos.get("tp_pct", config.MAX_TP_PCT * 100)) / 100.0 if active_pos.get("tp_pct") else config.MAX_TP_PCT
+            sl_threshold = float(active_pos.get("sl_pct", config.SL_MIN_PCT * 100)) / 100.0 if active_pos.get("sl_pct") else config.SL_MIN_PCT
+            time_stop_minutes = float(active_pos.get("time_stop_minutes", config.TIME_STOP_MINUTES))
 
             # 1.  ?
             if pnl_pct >= tp_threshold:
@@ -549,8 +549,8 @@ class KiwoomLiveRunner:
             return
 
         active_pos = self._get_active_position()
-        tp_max_pct = float(active_pos.get("tp_pct", 3.5)) / 100.0 if active_pos else 0.035
-        sl_initial_pct = float(active_pos.get("sl_pct", 2.0)) / 100.0 if active_pos else 0.020
+        tp_max_pct = float(active_pos.get("tp_pct", config.MAX_TP_PCT * 100)) / 100.0 if active_pos else config.MAX_TP_PCT
+        sl_initial_pct = float(active_pos.get("sl_pct", config.SL_MIN_PCT * 100)) / 100.0 if active_pos else config.SL_MIN_PCT
 
         for h in holdings:
             sym = str(h.get("symbol") or h.get("stk_cd") or "").strip().upper()
@@ -581,14 +581,13 @@ class KiwoomLiveRunner:
 
             is_trailing_active = False
             current_sl_px = buy_px * (1.0 - sl_initial_pct)
-            trailing_trigger_px = buy_px * 1.020
+            trailing_trigger_px = buy_px * (1.0 + config.TRAILING_TRIGGER_PCT)
             
             if peak_high >= trailing_trigger_px:
                 is_trailing_active = True
-                current_sl_px = buy_px * 1.005
                 
             if is_trailing_active:
-                t = peak_high * 0.992
+                t = peak_high * (1.0 - config.TRAILING_DROP_PCT)
                 if t > current_sl_px:
                     current_sl_px = t
             
@@ -673,7 +672,7 @@ class KiwoomLiveRunner:
             cur_px = float(self.ws_streamer.get_latest_price(symbol, ref_price))
             if cur_px <= 0:
                 cur_px = ref_price
-            order_px_1 = round(cur_px + 0.03, 2)
+            order_px_1 = round(cur_px + config.BUY_SLIPPAGE_ADJUST, 2)
 
             logger.info(f"?? [1? ] {symbol} {target_qty}?@ ${order_px_1:.2f} ({self.order_timeout_buy_sec:.0f}? ???)")
             ord_res_1 = self.broker.send_order(symbol=symbol, order_type="BUY", quantity=target_qty, price=order_px_1)
@@ -686,7 +685,7 @@ class KiwoomLiveRunner:
 
 
             self.dispatcher.send_telegram_message(buy_msg)
-            system_logger.log("TRADE", "AutoExecution", f"?? [{self.broker.broker_name} {symbol} 1? ] {target_qty}?@ ${order_px_1:.2f} (???{top_conf:.1f}%)")
+            system_logger.log("TRADE", "AutoExecution", f"🚀 [{self.broker.broker_name}] {symbol} 1차 매수 진입 - {target_qty}주 @ ${order_px_1:.2f} (AI확신도: {top_conf:.1f}%)")
 
             # 1. ???(?  ??0ms   ?)
             is_filled_1, filled_1, unfilled_1 = self._wait_for_fill(
@@ -807,11 +806,11 @@ class KiwoomLiveRunner:
 
             # 2??? ???
             latest_px_2 = float(self.ws_streamer.get_latest_price(symbol, cur_px))
-            order_px_2 = round(latest_px_2 + 0.03, 2)
+            order_px_2 = round(latest_px_2 + config.BUY_SLIPPAGE_ADJUST, 2)
             logger.info(f"??[2? ??(1/1)] {symbol} {remaining_qty}?@ ${order_px_2:.2f} ({self.order_timeout_buy_sec:.0f}? ???)")
             ord_res_2 = self.broker.send_order(symbol=symbol, order_type="BUY", quantity=remaining_qty, price=order_px_2)
             ord_no_2 = str(ord_res_2.get("order_no", "")).strip()
-            system_logger.log("TRADE", "OrderChasing", f"??[ 2??? ?? {symbol} {remaining_qty}?@ ${order_px_2:.2f} (???1/1)")
+            system_logger.log("TRADE", "OrderChasing", f"⚠️ [1차 미체결] {symbol} 2차 추격 매수 발주 - {remaining_qty}주 @ ${order_px_2:.2f}")
 
             # 2. ???(?  ??0ms   ?)
             is_filled_2, filled_2, unfilled_2 = self._wait_for_fill(
@@ -932,7 +931,7 @@ class KiwoomLiveRunner:
                 return True
             else:
                 self._clear_active_position()
-                system_logger.log("TRADE", "OrderChasing", f"? [  ?] {symbol} ? ? (??100%  ??AI ???????)")
+                system_logger.log("TRADE", "OrderChasing", f"🛑 [매수 취소] {symbol} 2차 추격 미체결로 매수 포기 (예수금 100% 보존, 스마트 주문취소)")
                 return False
 
         except Exception as e:
@@ -994,7 +993,7 @@ class KiwoomLiveRunner:
                     order_label = "? ? ?(Market Order)"
                 else:
                     # ? ? ? (? ?? ? ?? ? ): Bid - $0.05 ????
-                    sell_px = max(0.01, round(latest_px - 0.05, 2)) if latest_px > 0 else 0.0
+                    sell_px = max(0.01, round(latest_px - config.SELL_SLIPPAGE_ADJUST, 2)) if latest_px > 0 else 0.0
                     order_label = f"?  ??(${sell_px:.2f})"
 
                 logger.info(f"? [ ?  ({loop_retry}?)] {symbol} {quantity}?| {order_label} | ?: {reason_desc} ({self.order_timeout_sell_sec:.0f}? ??")
@@ -1051,7 +1050,7 @@ class KiwoomLiveRunner:
                         logger.debug(f"  ? ? (): {le}")
 
                     mode_title = "? [?? ?]" if self.broker.is_simulation else "? [?? ??]"
-                    system_logger.log("TRADE", "Liquidation", f"? [{mode_title} 100% ? ? ?] {symbol} {quantity}? | ?: {reason_desc} |  ?: {final_pnl_pct:+.2f}%")
+                    system_logger.log("TRADE", "Liquidation", f"🎯 [전량 청산 완료] {symbol} {quantity}주 | 사유: {reason_desc} | 최종 수익률: {final_pnl_pct:+.2f}%")
 
                     sell_msg = f"""{mode_title} 100% 매도 청산 완료\n🚨 **브로커:** `{self.broker.broker_name} {self.broker.mode_str}`\n💡 **사유:** `{reason_desc}`\n📊 **종목/수량:** `{symbol} {quantity:,}주`\n💰 **체결가:** `${latest_px:.2f}` (최종 수익률: {final_pnl_pct:+.2f}%)\n🛡️ **사후 관리:** `100% 현금화 완료 (AI MoE 새 진입 대기)`"""
                     self.dispatcher.send_telegram_message(sell_msg)
@@ -1080,7 +1079,7 @@ class KiwoomLiveRunner:
     _execute_sell_with_chase = _execute_sell_with_10s_chase
 
     def _market_execution_loop(self):
-        print("?? [?  ?????  ? ? (: 15?...")
+        system_logger.info("?? [?  ?????  ? ? (: 15?...")
         system_logger.log("INFO", "LiveRunner", "???  ??????")
         
         while True:
@@ -1094,7 +1093,7 @@ class KiwoomLiveRunner:
                         self.ws_streamer.reset_session_ticks()
                         
                         system_logger.log("TRADE", "MarketSession", f"??? ?? ? ? ({mkt['now_kst_str']})")
-                        open_msg = f"""🔥 **[정규장 매매 개시]**\n\n⏰ 현재 시각: `{mkt['now_kst_str']}`\n🖥️ 실행 모드: `{self.broker.mode_str}`\n🧠 AI 전략: `하이브리드 MoE V3 (09:30~15:30 EDT)`\n🎯 매수 룰: `GBDT 62% 이상`\n🛡️ 청산 룰: `Max TP +3.5% / ATR Trailing Stop`\n🌙 마감청산: `15:50 EDT 0% 오버나잇 전량 시장가`"""
+                        open_msg = f"""🏁 <b>[정규장 매매 개시]</b>\n\n🕒 현재 시각: `{mkt['now_kst_str']}`\n🤖 실행 모드: `{self.broker.mode_str}`\n🧠 AI 전략: `하이브리드 MoE V3 (09:30~15:30 EDT)`\n🎯 매수 룰: `GBDT {config.GBDT_CONFIDENCE_THRESHOLD*100:.0f}% 이상`\n🛡 방어 룰: `Max TP +{config.MAX_TP_PCT*100:.1f}% / {config.TRAILING_TRIGGER_PCT*100:.1f}% 도달 시 발동, -{config.TRAILING_DROP_PCT*100:.1f}% 하락 시 익절`\n⏰ 마감 룰: `15:50 EDT 0% 오버나잇 전량 시장가`"""
                         self.dispatcher.send_telegram_message(open_msg)
 
                     elif current_session in ["AFTER_MARKET_CLOSED", "CLOSED"]:
@@ -1118,7 +1117,7 @@ class KiwoomLiveRunner:
                                 with open(eod_date_file, "w", encoding="utf-8") as f:
                                     json.dump({"eod_date": today_str, "completed_at": time.strftime("%Y-%m-%d %H:%M:%S")}, f)
                             except Exception as e:
-                                print(f"[EOD Pipeline Error] {e}")
+                                system_logger.info(f"[EOD Pipeline Error] {e}")
 
                     self._last_market_session = current_session
 
@@ -1135,16 +1134,16 @@ class KiwoomLiveRunner:
                         self._last_briefing_time = now_t
                         
                         try:
-                            self.data_lake.sync_live_intraday_candles(["TQQQ", "SQQQ", "SOXX", "NVDA", "QQQ", "VIXY", "IEF"])
-                            df_15m = self.data_lake.load_candles("TQQQ", "15m")
+                            self.data_lake.sync_live_intraday_candles([config.TICKER_LONG, config.TICKER_SHORT, config.TICKER_TREND, config.MACRO_TICKER_2, config.MACRO_TICKER_1, config.MACRO_TICKER_3, config.MACRO_TICKER_4])
+                            df_15m = self.data_lake.load_candles(config.TICKER_LONG, "15m")
                             live_prices = {
-                                "TQQQ": self.ws_streamer.get_latest_price("TQQQ", 0.0),
-                                "SQQQ": self.ws_streamer.get_latest_price("SQQQ", 0.0),
-                                "SOXX": self.ws_streamer.get_latest_price("SOXX", 0.0),
-                                "QQQ": self.ws_streamer.get_latest_price("QQQ", 0.0),
-                                "NVDA": self.ws_streamer.get_latest_price("NVDA", 0.0),
-                                "VIXY": self.ws_streamer.get_latest_price("VIXY", 0.0),
-                                "IEF": self.ws_streamer.get_latest_price("IEF", 0.0),
+                                config.TICKER_LONG: self.ws_streamer.get_latest_price(config.TICKER_LONG, 0.0),
+                                config.TICKER_SHORT: self.ws_streamer.get_latest_price(config.TICKER_SHORT, 0.0),
+                                config.TICKER_TREND: self.ws_streamer.get_latest_price(config.TICKER_TREND, 0.0),
+                                config.MACRO_TICKER_1: self.ws_streamer.get_latest_price(config.MACRO_TICKER_1, 0.0),
+                                config.MACRO_TICKER_2: self.ws_streamer.get_latest_price(config.MACRO_TICKER_2, 0.0),
+                                config.MACRO_TICKER_3: self.ws_streamer.get_latest_price(config.MACRO_TICKER_3, 0.0),
+                                config.MACRO_TICKER_4: self.ws_streamer.get_latest_price(config.MACRO_TICKER_4, 0.0),
                             }
                             
                             moe_res = self.moe_orchestrator.evaluate_dual_filter_signal(df_candle_15m=df_15m, live_prices=live_prices)
@@ -1153,34 +1152,43 @@ class KiwoomLiveRunner:
                             conf = float(moe_res.get('gating_confidence', 0.0)) * 100.0
                             is_appr = moe_res.get('is_approved', False)
                             direction = moe_res.get('direction', 'NONE')
+                            gbdt_probs = moe_res.get('gbdt_probs', {"LONG": 0.33, "SHORT": 0.33, "NONE": 0.34})
+                            p_long = gbdt_probs.get("LONG", 0.0) * 100.0
+                            p_short = gbdt_probs.get("SHORT", 0.0) * 100.0
+                            p_none = gbdt_probs.get("NONE", 0.0) * 100.0
+                            threshold = float(moe_res.get('threshold_applied', 0.6)) * 100.0
                             
                             dir_str = "매수 대기" if direction == "NONE" else direction
                             briefing_msg = f"""🤖 <b>[Lumos AI 정기 브리핑]</b>
 • <b>시간</b>: {now_dt.strftime('%H:%M')} (KST)
 • <b>AI 판독 방향</b>: {dir_str}
-• <b>GBDT 확신도</b>: {conf:.1f}%
-• <b>VIXY</b>: {live_prices.get('VIXY', 0.0):.2f} / <b>IEF</b>: {live_prices.get('IEF', 0.0):.2f}
-• <b>상태</b>: {'진입 승인 🚀' if is_appr else '관망 중 👁️'}
+• <b>진입 임계값</b>: {threshold:.1f}%
+• <b>롱(LONG_ETF) 확률</b>: {p_long:.1f}%
+• <b>숏(SHORT_ETF) 확률</b>: {p_short:.1f}%
+• <b>관망 확률</b>: {p_none:.1f}%
+• 📍<b>최종 GBDT 확신도</b>: {conf:.1f}%
+📍<b>상태</b>: {'진입 승인 🚀' if is_appr else '관망대기 ⏳'}
 """
                             self.dispatcher.send_telegram_message(briefing_msg)
-                            system_logger.log("INFO", "AI", f"15???? ? (?: {conf:.1f}%)")
+                            detailed_log = f"15분봉 AI 브리핑 [방향: {dir_str}, 롱: {p_long:.1f}%, 숏: {p_short:.1f}%, 관망: {p_none:.1f}%, 상태: {'진입 승인' if is_appr else '대기'}]"
+                            system_logger.log("INFO", "AI", detailed_log)
                             
                             if is_appr and not active_pos and not self.daily_circuit_breaker_triggered:
-                                if direction in ["LONG_TQQQ", "SHORT_SQQQ"]:
-                                    winner_sym = "TQQQ" if direction == "LONG_TQQQ" else "SQQQ"
+                                if direction in [f"LONG_{config.TICKER_LONG}", f"SHORT_{config.TICKER_SHORT}"]:
+                                    winner_sym = config.TICKER_LONG if direction == f"LONG_{config.TICKER_LONG}" else config.TICKER_SHORT
                                     cur_px = live_prices.get(winner_sym, 0.0)
                                     
                                     if cur_px > 0:
                                         conn_res = self.broker.test_connection()
                                         usd_avail = float(conn_res.get("usd_order_available", 0.0))
-                                        order_qty = int((usd_avail * 0.99) / (cur_px + 0.05))
+                                        order_qty = int((usd_avail * config.MAX_ALLOCATION_RATIO) / (cur_px + config.QTY_CALC_BUFFER))
                                         
                                         if order_qty > 0:
                                             system_logger.log("TRADE", "AI", f"V3 AI  ? ?! {winner_sym} {order_qty}? ?")
                                             atr_14 = float(moe_res.get('features', {}).get('ATR_14', cur_px * 0.018))
                                             atr_pct = (atr_14 / cur_px) * 100.0 if cur_px > 0 else 1.8
-                                            sl_pct = max(2.0, min(3.2, atr_pct * 1.5))
-                                            tp_pct = 3.5
+                                            sl_pct = config.SL_MIN_PCT * 100.0
+                                            tp_pct = config.MAX_TP_PCT * 100.0
                                             
                                             targets = {
                                                 "dynamic_tp_px": round(cur_px * (1.0 + tp_pct/100.0), 2),
@@ -1206,8 +1214,8 @@ class KiwoomLiveRunner:
                         stk_bal = self.broker.get_overseas_stock_balance()
                         if stk_bal.get("ok") and stk_bal.get("holdings"):
                             live_p = {
-                                "TQQQ": self.ws_streamer.get_latest_price("TQQQ", 0.0),
-                                "SQQQ": self.ws_streamer.get_latest_price("SQQQ", 0.0)
+                                config.TICKER_LONG: self.ws_streamer.get_latest_price(config.TICKER_LONG, 0.0),
+                                config.TICKER_SHORT: self.ws_streamer.get_latest_price(config.TICKER_SHORT, 0.0)
                             }
                             if current_session == "EOD_LIQUIDATION":
                                 for h in stk_bal.get("holdings"):
@@ -1236,53 +1244,52 @@ class KiwoomLiveRunner:
         """
         1???? ? ??????  ????? ??? ??
         """
-        print("=" * 75)
+        system_logger.info("=" * 75)
         # 0. ? [?  ??? ??1?  ? ???&  ??? ?
-        print("\n" + "=" * 75)
-        print("?  [?  ??? ??  ? ???&  ??? ?  ?")
-        print("=" * 75)
+        system_logger.info("\n" + "=" * 75)
+        system_logger.info("?  [?  ??? ??  ? ???&  ??? ?  ?")
+        system_logger.info("=" * 75)
         sync_res = USMarketCalendar.verify_time_synchronization()
         for chk_item in sync_res["checklist_items"]:
-            print(f"   ??{chk_item}")
+            system_logger.info(f"   ??{chk_item}")
         if not sync_res["all_ok"]:
             err_msg = "? [??? ????  ???? ??????? ??? ??!"
             logger.critical(err_msg)
             raise RuntimeError(err_msg)
-        print(f"   ??? ? ????100% ??? ({sync_res['dst_text']})")
-        print("=" * 75)
+        system_logger.info(f"   ??? ? ????100% ??? ({sync_res['dst_text']})")
+        system_logger.info("=" * 75)
 
         # 1.  ? ? ?
         mkt_status = USMarketCalendar.get_market_status()
         self._last_market_session = mkt_status["session_name"]
 
-        print(f"\n[1/3] ?  ? ? ??:")
-        print(f"   ??? ?: {mkt_status['status_desc']}")
-        print(f"   ??? ?: {mkt_status['now_kst_str']}")
-        print(f"   ??? ?: {mkt_status['now_ny_str']} ({mkt_status['dst_text']})")
-        print(f"   ??? : {mkt_status['next_open_kst_str']} (?? ?: {mkt_status['time_until_open_str']})")
+        system_logger.info(f"\n[1/3] ?  ? ? ??:")
+        system_logger.info(f"   ??? ?: {mkt_status['status_desc']}")
+        system_logger.info(f"   ??? ?: {mkt_status['now_kst_str']}")
+        system_logger.info(f"   ??? ?: {mkt_status['now_ny_str']} ({mkt_status['dst_text']})")
+        system_logger.info(f"   ??? : {mkt_status['next_open_kst_str']} (?? ?: {mkt_status['time_until_open_str']})")
 
         # 2. ? ?? ? ??
-        print(f"\n[2/3] {self.broker.broker_name} {self.broker.mode_str}  ?? ? ? ??:")
+        system_logger.info(f"\n[2/3] {self.broker.broker_name} {self.broker.mode_str}  ?? ? ? ??:")
         conn_res = self.broker.test_connection()
-        print(f"   ??OAuth2 ?: {'???  ?' if conn_res['ok'] else '?? ?'}")
-        print(f"   ??? : {self.broker.account_no}-{self.broker.account_type}")
-        print(f"   ?????: ${conn_res['usd_order_available']:,.2f} USD")
+        system_logger.info(f"   ??OAuth2 ?: {'???  ?' if conn_res['ok'] else '?? ?'}")
+        system_logger.info(f"   ??? : {self.broker.account_no}-{self.broker.account_type}")
+        system_logger.info(f"   ?????: ${conn_res['usd_order_available']:,.2f} USD")
 
         # 3. ?  ? ??????
-        ai_engine_desc = "`Phase 1: 15 GBDT Model (62% ? ??/ ????Veto ?? / GBDT Feature ?)`"
-        start_msg = f"""? **[Lumos ??{self.broker.mode_str} ?  ?????**
-??**? ?:** `{mkt_status['now_kst_str']}`
-? **? ???** `100% ??? (KST-NYT {sync_res['delta_hours']:.0f}h ? ?,  ???)`
-? ** ?:** `{mkt_status['status_desc']}`
-??**???:** `{mkt_status['next_open_kst_str']}` ({mkt_status['time_until_open_str']})
-? **? ?** `{self.broker.broker_name} ({self.broker.mode_str})`
-? ** :** `{self.broker.account_no}-{self.broker.account_type}`
-? **???:** `${conn_res['usd_order_available']:,.2f} USD` (??`{conn_res['krw_converted']:,}??)
-? ** ????** `{conn_res['holdings_count']}?
-? **AI ?:** {ai_engine_desc}
-??**? ? ?:** `3-Out Veto ???(? ? {self.daily_stoploss_count}/3??`
-??**??:** `10ms WebSocket ??? ????????? ??
-??, ???????? ???? ???."""
+        ai_engine_desc = f"`Phase 1: 15m GBDT Model ({config.GBDT_CONFIDENCE_THRESHOLD*100:.0f}% 이상 진입 / 크로스에셋 Veto 방패 / GBDT Feature 융합)`"
+        start_msg = f"""🏁 <b>[Lumos 라이브러너 기동] {self.broker.mode_str} 자동매매 프로세스 시작</b>
+🕒 <b>현재 시각:</b> `{mkt_status['now_kst_str']}`
+✅ <b>시계 동기화:</b> `100% 일치 (KST-NYT {sync_res['delta_hours']:.0f}h 시차 검증 완료)`
+📊 <b>시장 상태:</b> `{mkt_status['status_desc']}`
+⏰ <b>정규장 개장:</b> `{mkt_status['next_open_kst_str']}` ({mkt_status['time_until_open_str']})
+🏦 <b>증권사 연동:</b> `{self.broker.broker_name} ({self.broker.mode_str})`
+💼 <b>계좌 번호:</b> `{self.broker.account_no}-{self.broker.account_type}`
+💰 <b>가용 예수금:</b> `${conn_res['usd_order_available']:,.2f} USD` (약 `{conn_res['krw_converted']:,}원`)
+📦 <b>보유 종목수:</b> `{conn_res['holdings_count']}개`
+🤖 <b>AI 코어엔진:</b> {ai_engine_desc}
+⚡ <b>데이터 피드:</b> `10ms WebSocket 초고속 스트리밍 구독 완료`
+준비 완료, 정규장 개장까지 틱 데이터를 백그라운드 수집합니다."""
         try:
             self.dispatcher.send_telegram_message(start_msg)
             system_logger.log("INFO", "LiveRunner", f"? {self.broker.mode_str} ?  ? ??? (: {self.broker.account_no}, ?? ${conn_res['usd_order_available']:,.2f})")
@@ -1291,7 +1298,7 @@ class KiwoomLiveRunner:
         
         # 4. ????WebSocket) ??? ??
         self.ws_streamer.start()
-        print(f"??[{self.broker.broker_name} ??WebSocket ? ???] 10ms ??????? ?")
+        system_logger.info(f"??[{self.broker.broker_name} ??WebSocket ? ???] 10ms ??????? ?")
 
         # 5. ????   ?????
         trd_thread = threading.Thread(target=self._market_execution_loop, daemon=True)
@@ -1304,12 +1311,14 @@ class KiwoomLiveRunner:
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Lumos Auto Trading Live Runner")
+    parser.add_argument("--real", action="store_true", help="Run with real money broker")
+    parser.add_argument("--sim", action="store_true", help="Run with simulation/mock broker")
     args, unknown = parser.parse_known_args()
 
     is_sim = None
-    if args.real:
+    if getattr(args, 'real', False):
         is_sim = False
-    elif args.sim:
+    elif getattr(args, 'sim', False):
         is_sim = True
 
     runner = KiwoomLiveRunner(is_simulation=is_sim)

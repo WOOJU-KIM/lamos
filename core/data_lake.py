@@ -9,6 +9,7 @@ import numpy as np
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
+from core.system_logger import system_logger
 
 # Add project root to sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -24,16 +25,17 @@ if sys.platform.startswith('win'):
         pass
 
 from config import DATA_DIR, BASE_DIR
+import config
 
 MARKET_DATA_DB = DATA_DIR / "market_data.db"
-ALL_SYMBOLS = ["SOXL", "SOXS", "TQQQ", "SQQQ", "SOXX", "QQQ", "NVDA", "^VIX", "^TNX"]
+ALL_SYMBOLS = [config.TICKER_LONG, config.TICKER_SHORT]
 TIMEFRAMES = ["15m", "60m", "5m"]
 
 class MarketDataLake:
     """
     [Lumos v5.0 확장 영구 분봉 시계열 데이터 레이크 (7종 심볼 확장)]
-    1. 거래 대상: TQQQ, SQQQ
-    2. 섹터/지수: SOXX (^SOX), QQQ (나스닥 100)
+    1. 거래 대상: LONG_ETF, SHORT_ETF
+    2. 섹터/지수: TREND_ETF (^SOX), QQQ (나스닥 100)
     3. 매크로/주도주: NVDA (반도체 선행 주도주), ^VIX (변동성), ^TNX (미 10년물 국채금리)
     - 타임프레임: 3m/5m, 15m, 60m OHLCV 원천 가격 영구 저장 (UPSERT)
     """
@@ -163,7 +165,7 @@ class MarketDataLake:
             df = pd.read_sql(query, conn, params=params)
 
         if not df.empty:
-            df['Datetime'] = pd.to_datetime(df['datetime'])
+            df['Datetime'] = pd.to_datetime(df['datetime'].astype(str).str.replace(r'(\+|-)\d{2}:\d{2}$', '', regex=True))
             df.set_index('Datetime', inplace=True)
             df.sort_index(inplace=True)
 
@@ -204,7 +206,7 @@ class MarketDataLake:
             df = pd.read_sql(query, conn, params=[sym, tf, sym, tf])
 
         if not df.empty:
-            df['Datetime'] = pd.to_datetime(df['datetime'])
+            df['Datetime'] = pd.to_datetime(df['datetime'].astype(str).str.replace(r'(\+|-)\d{2}:\d{2}$', '', regex=True))
             df.set_index('Datetime', inplace=True)
             df.sort_index(inplace=True)
 
@@ -226,7 +228,7 @@ class MarketDataLake:
         api_key = os.getenv("ALPACA_API_KEY", "")
         secret_key = os.getenv("ALPACA_SECRET_KEY", "")
         if not api_key or not secret_key:
-            print(f"⚠️ ALPACA_API_KEY/SECRET 누락 - {symbol} ({timeframe}) 수집 불가")
+            system_logger.info(f"⚠️ ALPACA_API_KEY/SECRET 누락 - {symbol} ({timeframe}) 수집 불가")
             return 0
 
         sym = symbol.upper().strip()
@@ -270,7 +272,7 @@ class MarketDataLake:
                     break
                 time.sleep(0.1)
             except Exception as e:
-                print(f"⚠️ {sym} ({tf}) Alpaca 수집 예외: {e}")
+                system_logger.info(f"⚠️ {sym} ({tf}) Alpaca 수집 예외: {e}")
                 break
 
         if not all_bars:
@@ -292,14 +294,14 @@ class MarketDataLake:
         results = {}
         total_inserted = 0
 
-        print("⏳ [7종 심볼 콜드스타트 수집 시작] TQQQ, SQQQ, SOXX, QQQ, NVDA, VIXY, IEF...")
+        system_logger.info("⏳ [7종 심볼 콜드스타트 수집 시작] LONG_ETF, SHORT_ETF, TREND_ETF, QQQ, NVDA, VIXY, IEF...")
         for sym in ALL_SYMBOLS:
             for tf in TIMEFRAMES:
                 try:
                     count = self.harvest_symbol(sym, tf, period="60d")
                     results[f"{sym}_{tf}"] = count
                     total_inserted += count
-                    print(f"   • [{sym} {tf}] {count:,}개 적재 완료")
+                    system_logger.info(f"   • [{sym} {tf}] {count:,}개 적재 완료")
                 except Exception as e:
                     results[f"{sym}_{tf}"] = f"Error: {e}"
 
@@ -308,7 +310,7 @@ class MarketDataLake:
 
     def sync_live_intraday_candles(self, symbols: Optional[List[str]] = None) -> int:
         """장중 실시간 5분봉/15분봉 최신 데이터 동기화 (최근 1일치 고속 수집)"""
-        target_syms = symbols or ["SOXL", "SOXS", "TQQQ", "SQQQ", "NVDA", "QQQ", "SOXX", "^VIX"]
+        target_syms = symbols or ["SOXL", "SOXS", config.TICKER_LONG, config.TICKER_SHORT, config.MACRO_TICKER_2, config.MACRO_TICKER_1, config.TICKER_TREND, config.MACRO_TICKER_3]
         total_added = 0
         for sym in target_syms:
             for tf in ["5m", "15m", "60m"]:
@@ -436,14 +438,14 @@ class DailyAutoPipeline:
         import joblib
 
         # 최근 504 거래일 고정 롤링 윈도우 추출 (Concept Drift 방지 및 꼬리 절삭)
-        tqqq_15m = self.data_lake.load_rolling_candles("TQQQ", "15m", max_trading_days=504)
-        if len(tqqq_15m) < 100:
+        long_15m = self.data_lake.load_rolling_candles(config.TICKER_LONG, "15m", max_trading_days=504)
+        if len(long_15m) < 100:
             return {"ok": False, "msg": "데이터 부족으로 재학습 취소"}
 
         # 1. Track 1: LightGBM 최신화 롤링 재학습
         ml_engine = MLFeatureEngine(confidence_threshold=0.40)
-        tqqq_feat = ml_engine.extract_features(tqqq_15m)
-        trained_model, top_10, _ = ml_engine.train_and_select_top_features(tqqq_feat)
+        long_feat = ml_engine.extract_features(long_15m)
+        trained_model, top_10, _ = ml_engine.train_and_select_top_features(long_feat)
 
         refresh_path = BASE_DIR / "models" / "model_main_data_refresh.pkl"
         joblib.dump(trained_model, refresh_path)
@@ -476,13 +478,13 @@ class DailyAutoPipeline:
         import joblib
 
         # 최근 504 거래일 고정 롤링 윈도우 추출 (Concept Drift 방지 및 꼬리 절삭)
-        tqqq_15m = self.data_lake.load_rolling_candles("TQQQ", "15m", max_trading_days=504)
-        if len(tqqq_15m) < 100:
+        long_15m = self.data_lake.load_rolling_candles(config.TICKER_LONG, "15m", max_trading_days=504)
+        if len(long_15m) < 100:
             return {"ok": False, "msg": "데이터 부족으로 재학습 취소"}
 
         ml_engine = MLFeatureEngine(confidence_threshold=0.40)
-        tqqq_feat = ml_engine.extract_features(tqqq_15m)
-        trained_model, top_10, _ = ml_engine.train_and_select_top_features(tqqq_feat)
+        long_feat = ml_engine.extract_features(long_15m)
+        trained_model, top_10, _ = ml_engine.train_and_select_top_features(long_feat)
 
         refresh_path = BASE_DIR / "models" / "model_main_data_refresh.pkl"
         joblib.dump(trained_model, refresh_path)
@@ -506,8 +508,8 @@ class DailyAutoPipeline:
             "ok": True,
             "model_id": "M-DATA-REFRESH",
             "file_path": str(refresh_path),
-            "trading_days_used": len(tqqq_15m.index.strftime('%Y-%m-%d').unique()),
-            "total_bars": len(tqqq_15m),
+            "trading_days_used": len(long_15m.index.strftime('%Y-%m-%d').unique()),
+            "total_bars": len(long_15m),
             "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
 
@@ -557,7 +559,7 @@ class DailyAutoPipeline:
             pnl_sign = "+" if realized_pnl >= 0 else ""
             pnl_krw_sign = "+" if tdy_pl_krw >= 0 else ""
             exec_lines = [
-                f"  • **[원장 실체결 완료]** `SQQQ 등 당일 포지션 진입 및 100% 전량 청산 완료`",
+                f"  • **[원장 실체결 완료]** `SHORT_ETF 등 당일 포지션 진입 및 100% 전량 청산 완료`",
                 f"  • **당일 매수 약정금액:** `${tdy_book_usd:,.2f} USD` (`₩{tdy_book_krw:,}원`)",
                 f"  • **당일 확정 실현손익:** `{pnl_sign}${realized_pnl:.2f} USD` (`{pnl_krw_sign}₩{tdy_pl_krw:,}원` / `{pnl_sign}{realized_rate:.2f}%`)"
             ]
@@ -593,7 +595,7 @@ class DailyAutoPipeline:
 💱 **적용 환율:** `{exrt:,.2f} KRW/USD`
 
 📦 **[1. 일일 시장 데이터 백업 완료]**
-• **대상 심볼:** `SOXL, SOXS, NVDA, QQQ, SOXX, VIXY, IEF, TQQQ, SQQQ (9종)`
+• **대상 심볼:** `SOXL, SOXS, NVDA, QQQ, TREND_ETF, VIXY, IEF, LONG_ETF, SHORT_ETF (9종)`
 • **적재 타임프레임:** `5분봉 / 15분봉 / 60분봉 전수 DB 백업 완료`
 
 {retrain_text}
@@ -615,39 +617,39 @@ class DailyAutoPipeline:
         [일일 EOD 자동화 파이프라인 전 주기 원스톱 실행]
         1. 데이터 적재 ➔ 2. 전 모델 재학습 ➔ 3. 전수 백테스트 ➔ 4. 텔레그램 브리핑
         """
-        print("=" * 75)
-        print("🚀 [Lumos 일일 EOD 원스톱 파이프라인 가동] 🚀")
-        print("=" * 75)
+        system_logger.info("=" * 75)
+        system_logger.info("🚀 [Lumos 일일 EOD 원스톱 파이프라인 가동] 🚀")
+        system_logger.info("=" * 75)
 
         # 1. 데이터 적재
-        print("\n[1/4] 7종 심볼 분봉 데이터 수집 및 DB 적재...")
+        system_logger.info("\n[1/4] 7종 심볼 분봉 데이터 수집 및 DB 적재...")
         h_res = self.run_step1_daily_harvest()
         records_cnt = h_res.get("total_records_updated", 0)
-        print(f"   • {records_cnt:,}개 캔들 DB UPSERT 완료")
+        system_logger.info(f"   • {records_cnt:,}개 캔들 DB UPSERT 완료")
 
         # 2. 전 모델 재학습
-        print("\n[2/4] 7대 전 모델 롤링 재학습 및 피처 갱신...")
+        system_logger.info("\n[2/4] 7대 전 모델 롤링 재학습 및 피처 갱신...")
         from zoneinfo import ZoneInfo
         now_kst = datetime.now().astimezone(ZoneInfo('Asia/Seoul'))
         if now_kst.weekday() == 5:  # Saturday KST
             r_res = self.run_step2_retrain_all_models()
-            print(f'   -> {len(r_res.get("models_updated", []))} models rolled and applied.')
+            system_logger.info(f'   -> {len(r_res.get("models_updated", []))} models rolled and applied.')
         else:
             r_res = {'models_updated': []}
-            print('   -> Skipping model training (Only applied on Saturday mornings KST to prevent mid-week drift).')
-        # print(f"   • {len(r_res.get('models_updated', []))}개 모델 아티팩트 및 레지스트리 갱신 완료")
+            system_logger.info('   -> Skipping model training (Only applied on Saturday mornings KST to prevent mid-week drift).')
+        # system_logger.info(f"   • {len(r_res.get('models_updated', []))}개 모델 아티팩트 및 레지스트리 갱신 완료")
 
         # 3. 전수 백테스트
-        print("\n[3/4] 최신 캔들 포함 7대 모델 전수 백테스트 재시뮬레이션...")
+        system_logger.info("\n[3/4] 최신 캔들 포함 7대 모델 전수 백테스트 재시뮬레이션...")
         tracks = self.run_step3_backtest_all_models()
-        print(f"   • {len(tracks)}개 트랙 백테스트 결과 DB 적재 완료")
+        system_logger.info(f"   • {len(tracks)}개 트랙 백테스트 결과 DB 적재 완료")
 
         # 4. 텔레그램 발송
         tg_ok = False
         if send_telegram:
-            print("\n[4/4] 텔레그램 일일 결산 & 백테스트 성적표 발송...")
+            system_logger.info("\n[4/4] 텔레그램 일일 결산 & 백테스트 성적표 발송...")
             tg_ok = self.run_step4_send_telegram_briefing(tracks, records_cnt)
-            print(f"   • 텔레그램 발송: {'✅ 성공' if tg_ok else '⚠️ 실패'}")
+            system_logger.info(f"   • 텔레그램 발송: {'✅ 성공' if tg_ok else '⚠️ 실패'}")
 
         return {
             "ok": True,

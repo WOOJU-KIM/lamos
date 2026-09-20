@@ -1,3 +1,4 @@
+import config
 import yfinance as yf
 import pandas as pd
 from typing import Dict, Any
@@ -11,10 +12,10 @@ class DataAgent:
     """
     def __init__(self):
         self.symbols = {
-            "TQQQ": "TQQQ",
-            "SQQQ": "SQQQ",
-            "SOXX": "SOXX",
-            "VIX": "^VIX"
+            config.TICKER_LONG: config.TICKER_LONG,
+            config.TICKER_SHORT: config.TICKER_SHORT,
+            config.TICKER_TREND: config.TICKER_TREND,
+            "VIX": config.MACRO_TICKER_3
         }
 
     def fetch_market_data(self) -> Dict[str, Any]:
@@ -76,8 +77,8 @@ class DataAgent:
 
     def get_summary_text(self, market_data: Dict[str, Any]) -> str:
         """에이전트에 주입할 텍스트 요약본 생성"""
-        tqqq = market_data["assets"]["TQQQ"]
-        sqqq = market_data["assets"]["SQQQ"]
+        tqqq = market_data["assets"][config.TICKER_LONG]
+        sqqq = market_data["assets"][config.TICKER_SHORT]
         vix = market_data["vix"]
 
         summary = f"""[실시간 시장 데이터 브리핑 - {market_data['timestamp']}]

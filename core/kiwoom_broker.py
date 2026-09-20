@@ -1,3 +1,4 @@
+import config
 import os
 import sys
 import json
@@ -8,6 +9,7 @@ import logging
 from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime, timedelta
 from pathlib import Path
+from core.system_logger import system_logger
 
 # Add project root to sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -38,7 +40,7 @@ class KiwoomBroker:
     """
     [Lumos 키움증권 OpenAPI REST 듀얼 스위칭 브로커]
     1. KIWOOM_IS_SIMULATION 플래그(1: 모의투자, 0: 실전투자)에 따라 동적 엔드포인트 및 인증키 자동 스위칭
-    2. 미국/해외주식 외화 예수금(ust21110) 및 원장 잔고(ust21070) 실시간 조회
+    2. 국내주식 외화 예수금(kt00001) 및 원장 잔고(kt00018) 실시간 조회
     3. 국내주식 예수금(kt00001) 및 잔고(kt00018) 통합 지원
     4. OAuth2 토큰 발급 및 만료 전 자동 갱신 메모리 캐싱
     """
@@ -183,12 +185,12 @@ class KiwoomBroker:
         req = urllib.request.Request(url, data=payload_bytes, headers=headers, method="POST")
 
         # 🔍 요청 직전 URL / Headers / Body 전문 Full 출력
-        print("\n" + "=" * 80)
-        print(f"📡 [REST TR REQUEST 송출] API ID: {api_id} | Endpoint: {endpoint}")
-        print(f"   • URL: {url}")
-        print(f"   • Headers: {json.dumps(headers, ensure_ascii=False)}")
-        print(f"   • Body: {json.dumps(body_dict, ensure_ascii=False)}")
-        print("=" * 80)
+        system_logger.info("\n" + "=" * 80)
+        system_logger.info(f"📡 [REST TR REQUEST 송출] API ID: {api_id} | Endpoint: {endpoint}")
+        system_logger.info(f"   • URL: {url}")
+        system_logger.info(f"   • Headers: {json.dumps(headers, ensure_ascii=False)}")
+        system_logger.info(f"   • Body: {json.dumps(body_dict, ensure_ascii=False)}")
+        system_logger.info("=" * 80)
 
         try:
             with urllib.request.urlopen(req, timeout=10) as response:
@@ -208,9 +210,9 @@ class KiwoomBroker:
                 data = json.loads(raw_text)
                 
                 # 🔍 수신된 HTTP 상태코드 및 Response Body 전문 Full 출력
-                print(f"📥 [REST TR RESPONSE 수신] HTTP Status: {response.status}")
-                print(f"   • Raw Body: {raw_text}")
-                print("=" * 80 + "\n")
+                system_logger.info(f"📥 [REST TR RESPONSE 수신] HTTP Status: {response.status}")
+                system_logger.info(f"   • Raw Body: {raw_text}")
+                system_logger.info("=" * 80 + "\n")
 
                 rc = data.get("return_code", 0)
                 rm = data.get("return_msg", "")
@@ -223,9 +225,9 @@ class KiwoomBroker:
 
         except urllib.error.HTTPError as e:
             err_text = e.read().decode("utf-8")
-            print(f"❌ [REST TR HTTP ERROR] HTTP Status: {e.code}")
-            print(f"   • Error Body: {err_text}")
-            print("=" * 80 + "\n")
+            system_logger.info(f"❌ [REST TR HTTP ERROR] HTTP Status: {e.code}")
+            system_logger.info(f"   • Error Body: {err_text}")
+            system_logger.info("=" * 80 + "\n")
             logger.error(f"❌ TR 요청 실패 [{api_id}] HTTP {e.code}: {err_text}")
             
             # 🔁 HTTP 429 (유량 초과) 발생 시 0.6초 백오프 후 1회 자동 재시도
@@ -239,16 +241,16 @@ class KiwoomBroker:
             return {"return_code": e.code, "return_msg": err_text, "ok": False}
 
         except Exception as e:
-            print(f"❌ [REST TR EXCEPTION] Exception: {e}")
-            print("=" * 80 + "\n")
+            system_logger.info(f"❌ [REST TR EXCEPTION] Exception: {e}")
+            system_logger.info("=" * 80 + "\n")
             logger.error(f"❌ TR 요청 예외 [{api_id}]: {e}")
             if raise_on_error:
                 raise
             return {"return_code": -1, "return_msg": str(e), "ok": False}
 
-    def get_overseas_deposit(self) -> Dict[str, Any]:
+    def get_domestic_deposit(self) -> Dict[str, Any]:
         """
-        [TR: ust21110] 미국/해외주식 외화예수금 조회 요청
+        [TR: kt00001] 국내주식 외화예수금 조회 요청
         - USD 외화 예수금, 외화 주문가능금액, 원화환산금액 등 반환 (5초 캐시로 429 방지)
         """
         now_ts = time.time()
@@ -257,37 +259,37 @@ class KiwoomBroker:
 
         body = {
             "cano": self.account_no,
-            "acnt_prdt_cd": self.account_type
+            "acnt_prdt_cd": self.account_type,
+            "qry_tp": "0"
         }
-        res = self._send_tr_request(endpoint="/api/us/acnt", api_id="ust21110", body_dict=body)
+        res = self._send_tr_request(endpoint="/api/dostk/acnt", api_id="kt00001", body_dict=body)
+
 
         if res.get("return_code") == 0:
-            usd_info = {}
-            for item in res.get("result_list", []):
-                if item.get("crnc_code") == "USD":
-                    usd_info = item
-                    break
-
+            # 국내장: 단일 예수금 데이터 (주로 result_list[0] 또는 최상위 dict에 존재)
+            item = res.get("result_list", [{}])[0] if res.get("result_list") else res
+            
             def _parse_float(val, default=0.0):
                 try:
                     return float(str(val).replace(",", "").strip())
                 except Exception:
                     return default
 
-            usd_deposit = _parse_float(usd_info.get("fc_entra", 0))
-            usd_order_avail = _parse_float(usd_info.get("fc_ord_alowa", 0))
-            krw_converted = _parse_float(usd_info.get("fc_booka", 0))
-
+            krw_deposit = int(_parse_float(item.get("deposit_d2") or item.get("dnca_tot_amt") or item.get("예수금") or 0))
+            krw_order_avail = int(_parse_float(item.get("order_available_krw") or item.get("ord_psbl_amt") or item.get("주문가능금액") or krw_deposit))
+            
             dep_res = {
                 "ok": True,
-                "currency": "USD",
-                "usd_deposit": usd_deposit,
-                "usd_order_available": usd_order_avail,
-                "krw_converted": int(krw_converted),
-                "all_currencies": res.get("result_list", []),
+                "currency": "KRW",
+                "usd_deposit": 0.0,
+                "usd_order_available": 0.0,
+                "krw_converted": krw_deposit,
+                "krw_deposit": krw_deposit,
+                "krw_order_available": krw_order_avail,
                 "raw_response": res,
                 "msg": res.get("return_msg", "정상 처리")
             }
+
             self._cached_deposit = dep_res
             self._deposit_cached_time = now_ts
             return dep_res
@@ -303,9 +305,9 @@ class KiwoomBroker:
                 "msg": res.get("return_msg", "조회 실패")
             }
 
-    def get_overseas_stock_balance(self, force_refresh: bool = False) -> Dict[str, Any]:
+    def get_domestic_stock_balance(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
-        [TR: ust21070] 미국주식 원장잔고확인 요청
+        [TR: kt00018] 국내주식 원장잔고확인 요청
         - 총평가금액, 총매입금액, 평가손익, 보유종목 리스트 (5초 캐시, force_refresh=True 시 즉시 재조회)
         """
         now_ts = time.time()
@@ -315,9 +317,11 @@ class KiwoomBroker:
         body = {
             "cano": self.account_no,
             "acnt_prdt_cd": self.account_type,
-            "qry_tp": "1"
+            "qry_tp": "1",
+            "dmst_stex_tp": "KRX"
         }
-        res = self._send_tr_request(endpoint="/api/us/acnt", api_id="ust21070", body_dict=body)
+        res = self._send_tr_request(endpoint="/api/dostk/acnt", api_id="kt00018", body_dict=body)
+
 
         if res.get("return_code") == 0:
             def _parse_float(val, default=0.0):
@@ -326,23 +330,21 @@ class KiwoomBroker:
                 except Exception:
                     return default
 
-            tot_evlt_usd = _parse_float(res.get("tot_evlt_amt", 0))
-            tot_prch_usd = _parse_float(res.get("tot_prch_amt", 0))
-            tot_pl_usd = _parse_float(res.get("tot_pl_amt", 0))
-            tdy_book_usd = _parse_float(res.get("tdy_book_amt", 0))
-            tdy_pl_usd = _parse_float(res.get("tdy_pl_amt", 0))
-            tdy_pl_rate = _parse_float(res.get("tdy_pl_rt", 0))
-            tdy_book_krw = int(_parse_float(res.get("tdy_book_amt_krw", 0)))
-            tdy_pl_krw = int(_parse_float(res.get("tdy_pl_amt_krw", 0)))
+            tot_evlt_krw = int(_parse_float(res.get("tot_evlt_amt") or res.get("total_eval_amt") or 0))
+            tot_prch_krw = int(_parse_float(res.get("tot_prch_amt") or res.get("total_purchase_amt") or 0))
+            tot_pl_krw = int(_parse_float(res.get("tot_pl_amt") or res.get("total_pnl_amt") or 0))
+            tdy_pl_krw = int(_parse_float(res.get("tdy_pl_amt") or 0))
+            tdy_pl_rate = _parse_float(res.get("tdy_pl_rt") or 0)
+            
             raw_holdings = res.get("result_list", [])
             normalized_holdings = []
             for item in raw_holdings:
                 s_cd = str(item.get("stk_cd") or item.get("symbol") or "").strip().upper()
                 p_qty = int(_parse_float(item.get("poss_qty") or item.get("qty") or item.get("quantity") or 0))
-                b_px = _parse_float(item.get("frgn_stk_book_uv") or item.get("purchase_price") or item.get("avg_price") or 0.0)
-                n_px = _parse_float(item.get("now_pric") or item.get("eval_price") or b_px)
-                pl_amt = _parse_float(item.get("pl_amt") or 0.0)
-                pl_rt = _parse_float(item.get("pl_rt") or 0.0)
+                b_px = _parse_float(item.get("pchs_avg_pric") or item.get("purchase_price") or item.get("avg_price") or 0.0)
+                n_px = _parse_float(item.get("prpr") or item.get("now_pric") or item.get("eval_price") or b_px)
+                pl_amt = _parse_float(item.get("evlt_pfls_amt") or item.get("pl_amt") or 0.0)
+                pl_rt = _parse_float(item.get("evlt_pfls_rt") or item.get("pl_rt") or 0.0)
                 if s_cd and p_qty > 0:
                     normalized_holdings.append({
                         "symbol": s_cd,
@@ -351,30 +353,31 @@ class KiwoomBroker:
                         "poss_qty": p_qty,
                         "purchase_price": b_px,
                         "avg_price": b_px,
-                        "frgn_stk_book_uv": b_px,
                         "eval_price": n_px,
                         "now_pric": n_px,
-                        "pnl_amount_usd": pl_amt,
+                        "pnl_amount_krw": pl_amt,
                         "pnl_rate": pl_rt,
                         "raw": item
                     })
 
             bal_res = {
                 "ok": True,
-                "currency": res.get("crnc_code", "USD"),
-                "total_eval_usd": tot_evlt_usd,
-                "total_purchase_usd": tot_prch_usd,
-                "total_pnl_usd": tot_pl_usd,
-                "tdy_book_usd": tdy_book_usd,
-                "tdy_pl_usd": tdy_pl_usd,
-                "tdy_pl_rate": tdy_pl_rate,
-                "tdy_book_krw": tdy_book_krw,
+                "currency": "KRW",
+                "total_eval_krw": tot_evlt_krw,
+                "total_eval_usd": 0.0,
+                "total_purchase_krw": tot_prch_krw,
+                "total_purchase_usd": 0.0,
+                "total_pnl_krw": tot_pl_krw,
+                "total_pnl_usd": 0.0,
                 "tdy_pl_krw": tdy_pl_krw,
+                "tdy_pl_usd": 0.0,
+                "tdy_pl_rate": tdy_pl_rate,
                 "holdings_count": len(normalized_holdings),
                 "holdings": normalized_holdings,
                 "raw_response": res,
                 "msg": res.get("return_msg", "정상 처리")
             }
+
             self._cached_stock_balance = bal_res
             self._stock_balance_cached_time = now_ts
             return bal_res
@@ -392,13 +395,13 @@ class KiwoomBroker:
             }
 
     def get_full_account_summary(self, max_age_sec: int = 30) -> Dict[str, Any]:
-        """미국/해외주식 외화 예수금 및 평가 잔고를 통합한 종합 계좌 상태 요약 (30초 메모리 캐시)"""
+        """국내주식 외화 예수금 및 평가 잔고를 통합한 종합 계좌 상태 요약 (30초 메모리 캐시)"""
         now_ts = time.time()
         if hasattr(self, "_cached_summary") and self._cached_summary and (now_ts - getattr(self, "_summary_cached_time", 0)) < max_age_sec:
             return self._cached_summary
 
-        dep_res = self.get_overseas_deposit()
-        stk_res = self.get_overseas_stock_balance()
+        dep_res = self.get_domestic_deposit()
+        stk_res = self.get_domestic_stock_balance()
 
         total_assets_usd = dep_res.get("usd_deposit", 0.0) + stk_res.get("total_eval_usd", 0.0)
 
@@ -428,17 +431,24 @@ class KiwoomBroker:
 
         return self._cached_summary
 
-    def get_stock_quote(self, symbol: str = "TQQQ", exchange: Optional[str] = None) -> Dict[str, Any]:
+    def get_stock_quote(self, symbol: str = config.TICKER_LONG, exchange: Optional[str] = None) -> Dict[str, Any]:
         """
-        [TR: ust10000 / 실시간 피드] 미국주식 현재가 및 시세 조회
+        [TR: ust10000 / 실시간 피드] 국내주식 현재가 및 시세 조회
         """
         sym_clean = symbol.upper().strip()
-        stex = exchange or ("NY" if sym_clean in ["SOXL", "SOXS", "SPY", "DIA", "VIXY"] else "ND")
+        stex = exchange or "KRX"
         
         # 실시간 백업: yfinance / DataLake 실시간 시세
+
         import yfinance as yf
         try:
-            t = yf.Ticker(sym_clean)
+            # 국내장: 종목코드만 오면 .KS(코스피) 기본 부착
+            yf_sym = sym_clean
+            if yf_sym.isdigit():
+                yf_sym += ".KS"
+                
+            t = yf.Ticker(yf_sym)
+
             fi = t.fast_info
             last_px = round(float(fi.last_price or fi.previous_close or 120.74), 2)
             return {
@@ -466,18 +476,18 @@ class KiwoomBroker:
         exchange: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        [공식 TR: ust20000 (미국주식 매수) / ust20001 (미국주식 매도)]
-        - 엔드포인트: POST /api/us/ordr
+        [공식 TR: kt10000 (국내주식 매수) / kt10001 (국내주식 매도)]
+        - 엔드포인트: POST /api/dostk/ordr
         - 거래소 구분(stex_tp): TQQQ/SQQQ는 "NY" (NYSE Arca), NVDA/QQQ는 "ND" (NASDAQ)
         - 키움 모의투자 규격: 지정가("00") 필수 적용
         - 🚨 실패/에러 발생 시 절대 삼키지 않고 즉시 RuntimeError를 발생시킴
         """
         is_buy = (order_type.upper() == "BUY")
-        api_id = "ust20000" if is_buy else "ust20001"
+        api_id = "kt10000" if is_buy else "kt10001"
         sym_clean = symbol.upper().strip()
 
         # 거래소 코드 자동 매핑 (TQQQ/SQQQ: NY, NVDA/QQQ: ND)
-        stex = exchange or ("NY" if sym_clean in ["SOXL", "SOXS", "SPY", "DIA", "VIXY"] else "ND")
+        stex = exchange or "KRX"
 
         # 현재가 조회
         quote = self.get_stock_quote(sym_clean, exchange=stex)
@@ -510,17 +520,17 @@ class KiwoomBroker:
         body = {
             "cano": str(self.account_no),
             "acnt_prdt_cd": str(self.account_type),
-            "stex_tp": str(stex),
+            "dmst_stex_tp": str(stex),
             "stk_cd": str(sym_clean),
             "ord_qty": str(int(quantity)),
             "ord_uv": ord_uv_str,
             "trde_tp": trde_tp
         }
 
-        logger.info(f"📤 [키움 미국주식 주문 전송] {self.mode_str} | {order_type} {sym_clean} {quantity}주 | {order_mode_desc} (TR: {api_id}, stex: {stex})")
+        logger.info(f"📤 [키움 국내주식 주문 전송] {self.mode_str} | {order_type} {sym_clean} {quantity}주 | {order_mode_desc} (TR: {api_id}, stex: {stex})")
         
         # 🚨 실패 시 즉시 RuntimeError 발생 (raise_on_error=True)
-        res = self._send_tr_request(endpoint="/api/us/ordr", api_id=api_id, body_dict=body, raise_on_error=True)
+        res = self._send_tr_request(endpoint="/api/dostk/ordr", api_id=api_id, body_dict=body, raise_on_error=True)
 
         return_code = res.get("return_code", -1)
         return_msg = res.get("return_msg", "")
@@ -553,52 +563,54 @@ class KiwoomBroker:
         [100% 키움증권 API 원장 통신 기반 공식 결산 데이터]
         - 임의 계산을 전면 배제하고, 키움증권 서버 통신으로 수신한 공식 원장 수치만 반환
         """
-        dep_res = self.get_overseas_deposit()
-        bal_res = self.get_overseas_stock_balance()
+        dep_res = self.get_domestic_deposit()
+        bal_res = self.get_domestic_stock_balance()
         open_res = self.get_open_orders()
 
-        avail_usd = float(dep_res.get("usd_order_available", 0.0))
-        exrt = float(dep_res.get("krw_converted", 0)) / avail_usd if avail_usd > 0 else 1402.5
-        stock_eval_usd = float(bal_res.get("total_eval_usd", 0.0))
-        total_eval_usd = round(avail_usd + stock_eval_usd, 2)
-        total_eval_krw = int(total_eval_usd * exrt)
+
+        avail_krw = float(dep_res.get("krw_order_available", 0))
+        exrt = 1.0
+        stock_eval_krw = float(bal_res.get("total_eval_krw", 0))
+        total_eval_krw = int(avail_krw + stock_eval_krw)
+        total_eval_usd = 0.0
 
         holdings = bal_res.get("holdings", [])
-        realized_pnl_usd = float(bal_res.get("tdy_pl_usd", 0.0))
-        realized_rate_pct = float(bal_res.get("tdy_pl_rate", 0.0))
-        tdy_book_usd = float(bal_res.get("tdy_book_usd", 0.0))
-        tdy_book_krw = int(bal_res.get("tdy_book_krw", 0))
+        realized_pnl_krw = float(bal_res.get("tdy_pl_krw", 0))
+        realized_rate_pct = float(bal_res.get("tdy_pl_rate", 0))
+        tdy_book_krw = int(bal_res.get("total_purchase_krw", 0))
         tdy_pl_krw = int(bal_res.get("tdy_pl_krw", 0))
 
         return {
             "ok": True,
             "source": f"키움증권(Kiwoom) {self.mode_str} OpenAPI 정규 통신",
             "account_no": f"{self.account_no}-{self.account_type}",
-            "avail_usd": avail_usd,
+            "avail_usd": 0.0,
+            "avail_krw": avail_krw,
             "total_eval_usd": total_eval_usd,
             "total_eval_krw": total_eval_krw,
             "exchange_rate": exrt,
             "holdings_count": len(holdings),
             "holdings": holdings,
-            "tdy_book_usd": tdy_book_usd,
+            "tdy_book_usd": 0.0,
             "tdy_book_krw": tdy_book_krw,
-            "realized_pnl_usd": realized_pnl_usd,
+            "realized_pnl_usd": 0.0,
             "realized_rate_pct": realized_rate_pct,
             "tdy_pl_krw": tdy_pl_krw,
             "executions": open_res.get("orders", []),
             "msg": "키움 공식 원장 조회 완료"
         }
 
+
     def get_open_orders(self) -> Dict[str, Any]:
         """
-        [TR: ust21050] 미국주식 체결/미체결 내역 조회
+        [TR: kt00007] 국내주식 체결/미체결 내역 조회
         """
         body = {
             "cano": self.account_no,
             "acnt_prdt_cd": self.account_type,
             "qry_tp": "0"
         }
-        res = self._send_tr_request(endpoint="/api/us/acnt", api_id="ust21050", body_dict=body)
+        res = self._send_tr_request(endpoint="/api/dostk/acnt", api_id="kt00007", body_dict=body)
         
         if res.get("return_code") == 0:
             orders = res.get("result_list", [])
@@ -618,24 +630,24 @@ class KiwoomBroker:
 
     def cancel_order(self, order_no: str, symbol: str, exchange: Optional[str] = None, quantity: int = 0) -> Dict[str, Any]:
         """
-        [공식 TR: ust20003] 키움증권 미국주식 주문 취소
-        - 엔드포인트: POST /api/us/ordr
+        [공식 TR: kt10003] 키움증권 국내주식 주문 취소
+        - 엔드포인트: POST /api/dostk/ordr
         - 파라미터: orig_ord_no, stex_tp, stk_cd, ord_qty, ord_uv("0"), trde_tp("00")
         """
         sym_clean = symbol.upper().strip()
-        stex = exchange or ("NY" if sym_clean in ["SOXL", "SOXS", "SPY", "DIA", "VIXY"] else "ND")
+        stex = exchange or "KRX"
         
         body = {
             "cano": str(self.account_no),
             "acnt_prdt_cd": str(self.account_type),
             "orig_ord_no": str(order_no),
-            "stex_tp": str(stex),
+            "dmst_stex_tp": str(stex),
             "stk_cd": str(sym_clean),
             "ord_qty": str(int(quantity)) if quantity > 0 else "0",
             "ord_uv": "0",
             "trde_tp": "00"
         }
-        res = self._send_tr_request(endpoint="/api/us/ordr", api_id="ust20003", body_dict=body)
+        res = self._send_tr_request(endpoint="/api/dostk/ordr", api_id="kt10003", body_dict=body)
         is_ok = (res.get("return_code") == 0)
         return {
             "ok": is_ok,
@@ -660,7 +672,7 @@ class KiwoomBroker:
             ord_sym = str(ord_info.get("stk_cd") or ord_info.get("symb") or "").strip().upper()
             ord_no = str(ord_info.get("ord_no") or ord_info.get("order_no") or "").strip()
             stex_nm = str(ord_info.get("stex_nm") or "NY").strip()
-            stex_tp = "NY" if ("아멕스" in stex_nm or ord_sym in ["SOXL", "SOXS"]) else "ND"
+            stex_tp = "KRX"
 
             if symbol and ord_sym and symbol.upper() != ord_sym:
                 continue
@@ -676,14 +688,14 @@ class KiwoomBroker:
 
         return cancel_results
 
-    def test_full_trading_pipeline(self, symbol: str = "TQQQ") -> Dict[str, Any]:
+    def test_full_trading_pipeline(self, symbol: str = config.TICKER_LONG) -> Dict[str, Any]:
         """
-        [키움증권 미국주식 매매 전 주기 6대 파이프라인 E2E 무결성 검증]
+        [키움증권 국내주식 매매 전 주기 6대 파이프라인 E2E 무결성 검증]
         1. OAuth2 인증 및 토큰 발급
-        2. 외화 예수금(ust21110) 실시간 조회
-        3. 주식 원장 잔고(ust21070) 실시간 조회
+        2. 외화 예수금(kt00001) 실시간 조회
+        3. 주식 원장 잔고(kt00018) 실시간 조회
         4. 실시간 주가/시세 수신 (TQQQ)
-        5. 매수 주문(tt80010) 신호 송수신 검증
+        5. 매수 주문(kt10000) 신호 송수신 검증
         6. 미체결 주문(ust21080) 및 계좌 잔고 무결성 확인
         """
         pipeline_results = {}
@@ -700,7 +712,7 @@ class KiwoomBroker:
             pipeline_results["1_auth_token"] = {"status": "FAIL", "error": str(e)}
 
         # 2. 외화예수금
-        dep = self.get_overseas_deposit()
+        dep = self.get_domestic_deposit()
         pipeline_results["2_foreign_deposit"] = {
             "status": "PASS" if dep.get("ok") else "WARNING",
             "usd_order_available": f"${dep.get('usd_order_available', 100000):,.2f}",
@@ -708,7 +720,7 @@ class KiwoomBroker:
         }
 
         # 3. 원장잔고
-        stk = self.get_overseas_stock_balance()
+        stk = self.get_domestic_stock_balance()
         pipeline_results["3_stock_balance"] = {
             "status": "PASS" if stk.get("ok") else "WARNING",
             "holdings_count": stk.get("holdings_count", 0),
@@ -724,7 +736,7 @@ class KiwoomBroker:
             "provider": quote.get("provider", "KiwoomREST")
         }
 
-        # 5. 매수 주문(tt80010) 신호 발송 테스트 (1주 모의 주문)
+        # 5. 매수 주문(kt10000) 신호 발송 테스트 (1주 모의 주문)
         test_px = quote.get("last_price", 28.50)
         buy_res = self.send_order(symbol=symbol, order_type="BUY", quantity=1, price=test_px)
         pipeline_results["5_buy_order_signal"] = {
@@ -759,9 +771,9 @@ class KiwoomBroker:
 
     def test_connection(self) -> Dict[str, Any]:
         """
-        [키움증권 미국주식 연동 상태 종합 점검]
+        [키움증권 국내주식 연동 상태 종합 점검]
         1. OAuth2 토큰 발급 테스트
-        2. 외화예수금(ust21110) 및 원장잔고(ust21070) 조회 테스트
+        2. 외화예수금(kt00001) 및 원장잔고(kt00018) 조회 테스트
         """
         start_t = time.time()
         try:
@@ -789,9 +801,9 @@ class KiwoomBroker:
 
 if __name__ == "__main__":
     broker = KiwoomBroker()
-    print("=" * 75)
-    print("🚀 [키움증권 미국주식 매매 송수신 전 주기 파이프라인 점검 테스트] 🚀")
-    print("=" * 75)
-    res = broker.test_full_trading_pipeline("TQQQ")
-    print(json.dumps(res, indent=2, ensure_ascii=False))
+    system_logger.info("=" * 75)
+    system_logger.info("🚀 [키움증권 국내주식 매매 송수신 전 주기 파이프라인 점검 테스트] 🚀")
+    system_logger.info("=" * 75)
+    res = broker.test_full_trading_pipeline(config.TICKER_LONG)
+    system_logger.info(json.dumps(res, indent=2, ensure_ascii=False))
 

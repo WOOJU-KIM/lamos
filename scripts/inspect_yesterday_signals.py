@@ -1,3 +1,4 @@
+import config
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -9,16 +10,16 @@ from core.heterogeneous_models import CrossAssetDislocationModel
 from core.ml_engine import MLFeatureEngine
 
 lake = MarketDataLake()
-tqqq_15m = lake.load_candles("TQQQ", "15m")
-nvda_15m = lake.load_candles("NVDA", "15m")
-qqq_15m = lake.load_candles("QQQ", "15m")
-vix_15m = lake.load_candles("^VIX", "15m")
-soxx_60m = lake.load_candles("SOXX", "60m")
+long_15m = lake.load_candles(config.TICKER_LONG, "15m")
+nvda_15m = lake.load_candles(config.MACRO_TICKER_2, "15m")
+qqq_15m = lake.load_candles(config.MACRO_TICKER_1, "15m")
+vix_15m = lake.load_candles(config.MACRO_TICKER_3, "15m")
+trend_60m = lake.load_candles(config.TICKER_TREND, "60m")
 
 print("=== TQQQ 최근 5개 15분봉 ===")
-print(tqqq_15m[["Open", "High", "Low", "Close", "Volume"]].tail(5))
+print(long_15m[["Open", "High", "Low", "Close", "Volume"]].tail(5))
 
-c = tqqq_15m["Close"]
+c = long_15m["Close"]
 ret_5 = float((c.iloc[-1] / c.iloc[-5] - 1.0))
 print(f"\nTQQQ 5봉 수익률: {ret_5*100:.2f}%")
 
@@ -27,14 +28,14 @@ cross_model = CrossAssetDislocationModel()
 n_c = nvda_15m["Close"]
 q_c = qqq_15m["Close"]
 v_c = vix_15m["Close"]
-soxx_15m = lake.load_candles("SOXX", "15m")
-sx_c = soxx_15m["Close"] if not soxx_15m.empty else n_c
-soxx_r = float(sx_c.iloc[-1] / sx_c.iloc[-5] - 1.0) if len(sx_c) >= 5 else nvda_r
+trend_15m = lake.load_candles(config.TICKER_TREND, "15m")
+sx_c = trend_15m["Close"] if not trend_15m.empty else n_c
+trend_r = float(sx_c.iloc[-1] / sx_c.iloc[-5] - 1.0) if len(sx_c) >= 5 else nvda_r
 
 sig_code, exp_conf, meta = cross_model.predict_signal(
-    tqqq_ret=ret_5,
+    long_ret=ret_5,
     nvda_ret=nvda_r,
-    soxx_ret=soxx_r,
+    trend_ret=trend_r,
     qqq_ret=qqq_r,
     vix_ret=vix_r,
     tnx_ret=0.0
@@ -44,7 +45,7 @@ print("Meta:", meta)
 
 # 2. GBDT 결과
 gbdt = MLFeatureEngine()
-df_feat = gbdt.extract_features(tqqq_15m)
+df_feat = gbdt.extract_features(long_15m)
 last_feat = df_feat.iloc[-1]
 print(f"\n[GBDT 모델 피처]")
 print(f"Confidence: {last_feat.get('Confidence')}")
@@ -54,12 +55,12 @@ print(f"BB_Lower: {last_feat.get('BB_Lower')}")
 print(f"Close: {last_feat.get('Close')}")
 
 # 3. 60분봉 추세
-if not soxx_60m.empty:
-    soxx_ema20 = soxx_60m['Close'].ewm(span=20, adjust=False).mean().iloc[-1]
-    soxx_c = soxx_60m['Close'].iloc[-1]
-    print(f"\n[60분봉 추세] SOXX Close: {soxx_c:.2f}, EMA20: {soxx_ema20:.2f} (차이: {((soxx_c/soxx_ema20)-1)*100:.2f}%)")
+if not trend_60m.empty:
+    trend_ema20 = trend_60m['Close'].ewm(span=20, adjust=False).mean().iloc[-1]
+    trend_c = trend_60m['Close'].iloc[-1]
+    print(f"\n[60분봉 추세] SOXX Close: {trend_c:.2f}, EMA20: {trend_ema20:.2f} (차이: {((trend_c/trend_ema20)-1)*100:.2f}%)")
 
 moe = MoEMetaOrchestrator(confidence_threshold=0.75)
-res = moe.evaluate_dual_filter_signal(tqqq_15m, threshold=0.75)
+res = moe.evaluate_dual_filter_signal(long_15m, threshold=0.75)
 print("\n=== 최종 MoE 평가 결과 ===")
 print(json.dumps(res, indent=2, ensure_ascii=False))

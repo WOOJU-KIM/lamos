@@ -1,3 +1,4 @@
+import config
 from google import genai
 from typing import Dict, Any
 import json
@@ -30,14 +31,14 @@ class RiskAgent:
         vix = market_data.get("vix", {})
         vix_price = float(vix.get("current_price", 18.0))
         regime_params = regime_data.get("strategy_params", {})
-        tqqq_mult = regime_params.get("tqqq_weight_mult", 1.0)
-        target_asset = strategy_decision.get("target_asset", "TQQQ")
+        long_mult = regime_params.get("long_weight_mult", 1.0)
+        target_asset = strategy_decision.get("target_asset", config.TICKER_LONG)
 
         system_instruction = f"""당신은 퀀트 헤지펀드의 최고리스크책임자(Chief Risk Officer, CRO)입니다.
 시장 국면(Regime)과 VIX 변동성 모델에 입각하여 포지션 진입 비중(%)을 최종 결정합니다.
 
 [리스크 심사 원칙]
-1. VIX < 18 (저변동성): 기준 비중 80~100%에 국면 가중치({tqqq_mult}x) 적용.
+1. VIX < 18 (저변동성): 기준 비중 80~100%에 국면 가중치({long_mult}x) 적용.
 2. VIX 18 ~ 25 (중변동성): 기준 비중 50~60%로 제한.
 3. VIX > 25 (고변동성): 기준 비중 20~30%로 축소.
 4. SQQQ 헷지 포지션 진입 시에는 약세 국면 가중치 적용.
@@ -57,8 +58,8 @@ class RiskAgent:
 
         prompt = f"""[시장 및 국면 데이터]
 - VIX 지수: {vix_price} pt (변동 {vix.get('change_pct', 0.0):+.2f}%)
-- 시장 국면: {regime_data.get('regime_name_kr')} (가중치 {tqqq_mult}x)
-- TQQQ 현재가: ${market_data.get('assets', {}).get('TQQQ', {}).get('current_price')} ({market_data.get('assets', {}).get('TQQQ', {}).get('change_pct')}%)
+- 시장 국면: {regime_data.get('regime_name_kr')} (가중치 {long_mult}x)
+- TQQQ 현재가: ${market_data.get('assets', {}).get(config.TICKER_LONG, {}).get('current_price')} ({market_data.get('assets', {}).get(config.TICKER_LONG, {}).get('change_pct')}%)
 
 [Strategy Agent의 제안]
 - 행동 계획: {strategy_decision.get('action')} (대상: {target_asset})
@@ -81,7 +82,7 @@ class RiskAgent:
             else:
                 parsed = json.loads(response_text)
         except Exception:
-            alloc = int(min(100, max(10, 80 * tqqq_mult))) if vix_price < 18 else 50
+            alloc = int(min(100, max(10, 80 * long_mult))) if vix_price < 18 else 50
             parsed = {
                 "risk_level": "LOW" if vix_price < 18 else "MODERATE",
                 "vix_analysis": f"VIX {vix_price}pt 기준 안정적 변동성 유지 중",

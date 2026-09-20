@@ -6,6 +6,7 @@ import requests
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple
+from core.system_logger import system_logger
 
 # Windows 콘솔 UTF-8 설정
 if sys.platform.startswith('win'):
@@ -87,10 +88,10 @@ class KisClient:
 • 오버나잇 0% 리스크 룰에 따라 정규장 마감 10분 전 전량 시장가 청산됩니다."""
             
             try:
-                print("\n" + "!" * 75)
-                print("[경고] 한국투자증권 실전투자(REAL) 모드로 가동되었습니다.")
-                print(f"    계좌번호: {cano_mask}-{self.acnt_prdt_cd} | Base URL: {self.base_url}")
-                print("!" * 75 + "\n")
+                system_logger.info("\n" + "!" * 75)
+                system_logger.info("[경고] 한국투자증권 실전투자(REAL) 모드로 가동되었습니다.")
+                system_logger.info(f"    계좌번호: {cano_mask}-{self.acnt_prdt_cd} | Base URL: {self.base_url}")
+                system_logger.info("!" * 75 + "\n")
             except Exception:
                 pass
 
@@ -109,7 +110,7 @@ class KisClient:
             }
             requests.post(url, json=payload, timeout=5)
         except Exception as e:
-            print(f"텔레그램 경고 발송 실패: {e}")
+            system_logger.info(f"텔레그램 경고 발송 실패: {e}")
 
     # =========================================================================
     # [1. OAuth2 토큰 발급 및 캐싱 관리]
@@ -289,7 +290,7 @@ class KisClient:
     # =========================================================================
     # [4. 해외주식 주문가능금액 / 예수금 조회]
     # =========================================================================
-    def inquire_deposit(self, ticker: str = "TQQQ", price: float = 10.0) -> Dict[str, Any]:
+    def inquire_deposit(self, ticker: str = config.TICKER_LONG, price: float = 10.0) -> Dict[str, Any]:
         """해외주식 매수가능금액(예수금) 조회 (거래소 자동 폴백 지원)"""
         url = f"{self.base_url}/uapi/overseas-stock/v1/trading/inquire-psamount"
         headers = self._get_common_headers(self.tr_id_deposit)
@@ -418,7 +419,7 @@ class KisClient:
                     q = int(h["qty"])
                     p = float(h["now_price"]) * 0.98  # 즉시 체결을 위해 -2% 슬리피지 지정가
                     if q > 0:
-                        print(f"[오버나잇 청산 가드] {t} {q}주 전량 매도 주문 실행 (사유: {reason})")
+                        system_logger.info(f"[오버나잇 청산 가드] {t} {q}주 전량 매도 주문 실행 (사유: {reason})")
                         ord_res = self.order_overseas_stock(t, "SELL", q, price=p)
                         results.append(ord_res)
         return results
@@ -451,7 +452,7 @@ class KisClient:
             test_summary["token_snippet"] = token[:10] + "..." if token else ""
 
             # 2. 예수금 조회 테스트
-            dep_res = self.inquire_deposit(ticker="TQQQ", price=10.0)
+            dep_res = self.inquire_deposit(ticker=config.TICKER_LONG, price=10.0)
             test_summary["deposit_ok"] = dep_res.get("ok", False)
             test_summary["avail_usd"] = dep_res.get("avail_usd", 0.0)
             test_summary["avail_krw"] = dep_res.get("avail_krw", 0.0)

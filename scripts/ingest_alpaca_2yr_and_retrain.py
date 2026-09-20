@@ -1,3 +1,4 @@
+import config
 import os
 import sys
 import time
@@ -122,7 +123,7 @@ def resample_to_60m(df_15m: pd.DataFrame) -> pd.DataFrame:
 
 def main():
     lake = MarketDataLake()
-    symbols = ["TQQQ", "SQQQ", "NVDA", "QQQ", "SOXX"]
+    symbols = [config.TICKER_LONG, config.TICKER_SHORT, config.MACRO_TICKER_2, config.MACRO_TICKER_1, config.TICKER_TREND]
     start_dt = "2024-09-15"
     end_dt = "2026-09-14"
     
@@ -151,10 +152,10 @@ def main():
     print("🧠 [2단계: 2년치 롤링 데이터 기반 GBDT & MoE 챔피언 재학습 개시]")
     print("=" * 85)
     
-    tqqq_15m_all = lake.load_candles("TQQQ", "15m")
-    print(f"📊 [DB 누적 총 데이터] TQQQ 15m: 총 {len(tqqq_15m_all):,}개 캔들")
-    print(f"   • 시작 시점: {tqqq_15m_all.index[0]}")
-    print(f"   • 종료 시점: {tqqq_15m_all.index[-1]}")
+    long_15m_all = lake.load_candles(config.TICKER_LONG, "15m")
+    print(f"📊 [DB 누적 총 데이터] TQQQ 15m: 총 {len(long_15m_all):,}개 캔들")
+    print(f"   • 시작 시점: {long_15m_all.index[0]}")
+    print(f"   • 종료 시점: {long_15m_all.index[-1]}")
     
     # 롤링 재학습 수행 및 모델 파일 저장
     orchestrator = train_and_save_moe_orchestrator(confidence_threshold=0.60, mode="hybrid_v3")

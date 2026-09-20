@@ -6,6 +6,7 @@ import pandas as pd
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List, Tuple, Optional
+from core.system_logger import system_logger
 
 # Add project root to sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -222,7 +223,7 @@ class CrossAssetDislocationModel:
     def compute_macro_score(
         self,
         nvda_ret: float,
-        soxx_ret: float,
+        trend_ret: float,
         qqq_ret: float,
         vix_ret: float,
         tnx_ret: float = 0.0,
@@ -230,14 +231,14 @@ class CrossAssetDislocationModel:
     ) -> float:
         """선행 매크로 복합 점수 산출: NVDA(40%) + SOXX(30%) + QQQ(20%) - VIX(10%) - TNX(10%)"""
         actual_nvda = kwargs.get('nvda_ret', nvda_ret)
-        actual_soxx = kwargs.get('soxx_ret', soxx_ret)
+        actual_trend = kwargs.get('trend_ret', trend_ret)
         actual_qqq = kwargs.get('qqq_ret', qqq_ret)
         actual_vix = kwargs.get('vix_ret', vix_ret)
         actual_tnx = kwargs.get('tnx_ret', tnx_ret)
 
         macro_score = (
             (actual_nvda * 0.40) +
-            (actual_soxx * 0.30) +
+            (actual_trend * 0.30) +
             (actual_qqq * 0.20) -
             (actual_vix * 0.10) -
             (actual_tnx * 0.10)
@@ -246,9 +247,9 @@ class CrossAssetDislocationModel:
 
     def predict_signal(
         self,
-        tqqq_ret: float,
+        long_ret: float,
         nvda_ret: float,
-        soxx_ret: float,
+        trend_ret: float,
         qqq_ret: float,
         vix_ret: float,
         tnx_ret: float = 0.0,
@@ -256,38 +257,38 @@ class CrossAssetDislocationModel:
     ) -> Tuple[int, float, str]:
         """
         선행 자산 대비 TQQQ의 괴리(Spread Lag) 판별
-        - 위치 인자 순서 정규화: (tqqq_ret, nvda_ret, soxx_ret, qqq_ret, vix_ret, tnx_ret)
+        - 위치 인자 순서 정규화: (long_ret, nvda_ret, trend_ret, qqq_ret, vix_ret, tnx_ret)
         - 키워드 인자(Keyword Arguments) 완벽 지원 및 과거 시그니처 역호환 보장
         """
-        actual_tqqq = kwargs.get('tqqq_ret', tqqq_ret)
+        actual_long = kwargs.get('long_ret', long_ret)
         actual_nvda = kwargs.get('nvda_ret', nvda_ret)
-        actual_soxx = kwargs.get('soxx_ret', soxx_ret)
+        actual_trend = kwargs.get('trend_ret', trend_ret)
         actual_qqq = kwargs.get('qqq_ret', qqq_ret)
         actual_vix = kwargs.get('vix_ret', vix_ret)
         actual_tnx = kwargs.get('tnx_ret', tnx_ret)
 
         # 🛡️ 단위 안전 방어: 퍼센트 단위(예: 1.5% -> 1.5) 전달 시 소수점(0.015)으로 자동 안전 정규화
-        if any(abs(r) > 0.5 for r in [actual_tqqq, actual_nvda, actual_soxx, actual_qqq]):
-            actual_tqqq /= 100.0
+        if any(abs(r) > 0.5 for r in [actual_long, actual_nvda, actual_trend, actual_qqq]):
+            actual_long /= 100.0
             actual_nvda /= 100.0
-            actual_soxx /= 100.0
+            actual_trend /= 100.0
             actual_qqq /= 100.0
             actual_vix /= 100.0
             actual_tnx /= 100.0
 
         macro_score = self.compute_macro_score(
             nvda_ret=actual_nvda,
-            soxx_ret=actual_soxx,
+            trend_ret=actual_trend,
             qqq_ret=actual_qqq,
             vix_ret=actual_vix,
             tnx_ret=actual_tnx
         )
-        dislocation = macro_score * 3.0 - actual_tqqq  # TQQQ 3배 레버리지 감안 괴리율
+        dislocation = macro_score * 2.0 - actual_long  # KODEX 2배 레버리지 감안 괴리율
 
-        if dislocation >= 0.012:  # 선행 자산 대비 TQQQ이 1.2% 이상 지연 저평가
+        if dislocation >= 0.008:  # 선행 자산 대비 KODEX가 0.8% 이상 지연 저평가
             conf = min(0.95, 0.65 + dislocation * 15.0)
             return 1, conf, f"크로스에셋 상방 괴리 (선행스코어={macro_score*100:+.2f}%, 괴리={dislocation*100:+.2f}%)"
-        elif dislocation <= -0.012:  # 선행 자산 대비 TQQQ이 과대평가 ➔ SQQQ 유리
+        elif dislocation <= -0.008:  # 선행 자산 대비 KODEX가 과대평가 ➔ 인버스 유리
             conf = min(0.95, 0.65 + abs(dislocation) * 15.0)
             return -1, conf, f"크로스에셋 하방 괴리 (선행스코어={macro_score*100:+.2f}%, 괴리={dislocation*100:+.2f}%)"
 
@@ -306,8 +307,8 @@ def build_and_save_all_heterogeneous_models():
     joblib.dump(m4, MODELS_DIR / "model_sub_statespace.pkl")
     joblib.dump(m5, MODELS_DIR / "model_sub_cross_asset.pkl")
 
-    print("✅ [4대 비시계열 이종 모델 직렬화 완료]")
-    print(f"   • {m2.model_name} ➔ models/model_sub_orderflow.pkl")
-    print(f"   • {m3.model_name} ➔ models/model_sub_tda.pkl")
-    print(f"   • {m4.model_name} ➔ models/model_sub_statespace.pkl")
-    print(f"   • {m5.model_name} ➔ models/model_sub_cross_asset.pkl")
+    system_logger.info("✅ [4대 비시계열 이종 모델 직렬화 완료]")
+    system_logger.info(f"   • {m2.model_name} ➔ models/model_sub_orderflow.pkl")
+    system_logger.info(f"   • {m3.model_name} ➔ models/model_sub_tda.pkl")
+    system_logger.info(f"   • {m4.model_name} ➔ models/model_sub_statespace.pkl")
+    system_logger.info(f"   • {m5.model_name} ➔ models/model_sub_cross_asset.pkl")

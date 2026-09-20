@@ -13,8 +13,8 @@ TRADE_LOGS_SUMMARY_JSON = DATA_DIR / "trade_logs_summary.json"
 
 class GranularBacktestEngine:
     """
-    [머신러닝 기반 3중 타임프레임 TQQQ/SQQQ 자율 퀀트 백테스팅 엔진 (100% 전액 투입 챔피언 베이스라인)]
-    1. 종목: TQQQ (3x 롱), SQQQ (3x 숏), ^SOX/SOXX (필라델피아 반도체 지수), ^VIX
+    [머신러닝 기반 3중 타임프레임 {config.NAME_LONG}/{config.NAME_SHORT} 자율 퀀트 백테스팅 엔진 (100% 전액 투입 챔피언 베이스라인)]
+    1. 종목: LONG_ETF (3x 롱), SHORT_ETF (3x 숏), ^SOX/TREND_ETF (필라델피아 반도체 지수), ^VIX
     2. 타임프레임 (Triple Screen):
        - 상위: 60분봉 (추세 필터: 반도체 지수 및 20EMA/MACD)
        - 메인: 15분봉 (LightGBM 머신러닝 학습 및 확신도 >= 0.40 포착)
@@ -61,52 +61,52 @@ class GranularBacktestEngine:
         from core.data_lake import MarketDataLake
         data_lake = MarketDataLake()
         
-        tqqq_15m_raw = data_lake.load_candles("TQQQ", "15m")
-        sqqq_15m_raw = data_lake.load_candles("SQQQ", "15m")
-        tqqq_60m_raw = data_lake.load_candles("TQQQ", "60m")
-        sqqq_60m_raw = data_lake.load_candles("SQQQ", "60m")
-        soxx_60m_raw = data_lake.load_candles("SOXX", "60m")
+        long_15m_raw = data_lake.load_candles(config.TICKER_LONG, "15m")
+        short_15m_raw = data_lake.load_candles(config.TICKER_SHORT, "15m")
+        long_60m_raw = data_lake.load_candles(config.TICKER_LONG, "60m")
+        short_60m_raw = data_lake.load_candles(config.TICKER_SHORT, "60m")
+        trend_60m_raw = data_lake.load_candles(config.TICKER_TREND, "60m")
 
-        if len(tqqq_15m_raw) < 100 or len(sqqq_15m_raw) < 100:
-            tqqq_15m_raw = yf.Ticker("TQQQ").history(period="60d", interval="15m")
-            sqqq_15m_raw = yf.Ticker("SQQQ").history(period="60d", interval="15m")
-            tqqq_60m_raw = yf.Ticker("TQQQ").history(period="60d", interval="60m")
-            sqqq_60m_raw = yf.Ticker("SQQQ").history(period="60d", interval="60m")
-            soxx_60m_raw = yf.Ticker("SOXX").history(period="60d", interval="60m")
+        if len(long_15m_raw) < 100 or len(short_15m_raw) < 100:
+            long_15m_raw = yf.Ticker(config.TICKER_LONG).history(period="60d", interval="15m")
+            short_15m_raw = yf.Ticker(config.TICKER_SHORT).history(period="60d", interval="15m")
+            long_60m_raw = yf.Ticker(config.TICKER_LONG).history(period="60d", interval="60m")
+            short_60m_raw = yf.Ticker(config.TICKER_SHORT).history(period="60d", interval="60m")
+            trend_60m_raw = yf.Ticker(config.TICKER_TREND).history(period="60d", interval="60m")
 
-            if tqqq_15m_raw.empty or sqqq_15m_raw.empty:
+            if long_15m_raw.empty or short_15m_raw.empty:
                 raise RuntimeError("시세 데이터 수집 실패")
             
-            data_lake.insert_candles("TQQQ", "15m", tqqq_15m_raw)
-            data_lake.insert_candles("SQQQ", "15m", sqqq_15m_raw)
-            data_lake.insert_candles("TQQQ", "60m", tqqq_60m_raw)
-            data_lake.insert_candles("SQQQ", "60m", sqqq_60m_raw)
-            data_lake.insert_candles("SOXX", "60m", soxx_60m_raw)
+            data_lake.insert_candles(config.TICKER_LONG, "15m", long_15m_raw)
+            data_lake.insert_candles(config.TICKER_SHORT, "15m", short_15m_raw)
+            data_lake.insert_candles(config.TICKER_LONG, "60m", long_60m_raw)
+            data_lake.insert_candles(config.TICKER_SHORT, "60m", short_60m_raw)
+            data_lake.insert_candles(config.TICKER_TREND, "60m", trend_60m_raw)
 
         # 2. 머신러닝 피처 추출 및 중요도 학습
-        tqqq_15m_feat = self.ml_engine.extract_features(tqqq_15m_raw)
-        sqqq_15m_feat = self.ml_engine.extract_features(sqqq_15m_raw)
+        long_15m_feat = self.ml_engine.extract_features(long_15m_raw)
+        short_15m_feat = self.ml_engine.extract_features(short_15m_raw)
 
         # LightGBM 학습 및 Top 10/Top 3 피처 선별 (사전 주입된 모델이 없을 때만 자동 학습)
         if self.ml_engine.model is None or not self.ml_engine.feature_names:
-            _, top_10_features, top_3_features = self.ml_engine.train_and_select_top_features(tqqq_15m_feat)
+            _, top_10_features, top_3_features = self.ml_engine.train_and_select_top_features(long_15m_feat)
         else:
             top_10_features = self.ml_engine.top_10_features or self.ml_engine.feature_names[:10]
             top_3_features = self.ml_engine.top_3_features or top_10_features[:3]
 
         # 고속 벡터 확신도 계산
-        tqqq_15m_feat = self.ml_engine.add_confidence_columns(tqqq_15m_feat)
-        sqqq_15m_feat = self.ml_engine.add_confidence_columns(sqqq_15m_feat)
+        long_15m_feat = self.ml_engine.add_confidence_columns(long_15m_feat)
+        short_15m_feat = self.ml_engine.add_confidence_columns(short_15m_feat)
 
-        tqqq_60m = self._compute_60m_trend(tqqq_60m_raw)
-        sqqq_60m = self._compute_60m_trend(sqqq_60m_raw)
-        soxx_60m = self._compute_60m_trend(soxx_60m_raw)
+        long_60m = self._compute_60m_trend(long_60m_raw)
+        short_60m = self._compute_60m_trend(short_60m_raw)
+        trend_60m = self._compute_60m_trend(trend_60m_raw)
 
-        unique_dates = sorted(list(set(tqqq_15m_feat['date_str']).intersection(set(sqqq_15m_feat['date_str']))))
+        unique_dates = sorted(list(set(long_15m_feat['date_str']).intersection(set(short_15m_feat['date_str']))))
 
         # 3. 3중 타임프레임 스나이퍼 시뮬레이션
         sim_res = self._execute_triple_screen_simulation(
-            tqqq_15m_feat, sqqq_15m_feat, tqqq_60m, sqqq_60m, soxx_60m, unique_dates
+            long_15m_feat, short_15m_feat, long_60m, short_60m, trend_60m, unique_dates
         )
 
         sim_res["top_10_features"] = top_10_features
@@ -131,8 +131,8 @@ class GranularBacktestEngine:
                     "total_return_pct": sim_res["total_return_pct"],
                     "total_pnl_krw": sim_res["total_pnl_krw"],
                     "win_rate_pct": sim_res["win_rate_pct"],
-                    "tqqq_win_rate_pct": sim_res["tqqq_win_rate_pct"],
-                    "sqqq_win_rate_pct": sim_res["sqqq_win_rate_pct"],
+                    "long_win_rate_pct": sim_res["long_win_rate_pct"],
+                    "short_win_rate_pct": sim_res["short_win_rate_pct"],
                     "mdd_pct": sim_res["mdd_pct"],
                     "profit_factor": sim_res["profit_factor"],
                     "allocation_pct": self.allocation_pct,
@@ -147,11 +147,11 @@ class GranularBacktestEngine:
 
     def _execute_triple_screen_simulation(
         self,
-        tqqq_15m: pd.DataFrame,
-        sqqq_15m: pd.DataFrame,
-        tqqq_60m: pd.DataFrame,
-        sqqq_60m: pd.DataFrame,
-        soxx_60m: pd.DataFrame,
+        long_15m: pd.DataFrame,
+        short_15m: pd.DataFrame,
+        long_60m: pd.DataFrame,
+        short_60m: pd.DataFrame,
+        trend_60m: pd.DataFrame,
         unique_dates: List[str]
     ) -> Dict[str, Any]:
         """머신러닝 3중 타임프레임 스나이퍼 매매 시뮬레이션 (챔피언 24.38% 룰셋)"""
@@ -163,20 +163,20 @@ class GranularBacktestEngine:
         total_wins = 0
         total_losses = 0
         total_trades = 0
-        tqqq_wins = 0
-        tqqq_losses = 0
-        sqqq_wins = 0
-        sqqq_losses = 0
+        long_wins = 0
+        long_losses = 0
+        short_wins = 0
+        short_losses = 0
 
         all_closed_trades = []
         all_trade_records: List[Dict[str, Any]] = []
         trade_id_seq = 1
 
         for date_str in unique_dates:
-            day_tqqq_15m = tqqq_15m[tqqq_15m['date_str'] == date_str]
-            day_sqqq_15m = sqqq_15m[sqqq_15m['date_str'] == date_str]
+            day_long_15m = long_15m[long_15m['date_str'] == date_str]
+            day_short_15m = short_15m[short_15m['date_str'] == date_str]
             
-            if len(day_tqqq_15m) < 5 or len(day_sqqq_15m) < 5:
+            if len(day_long_15m) < 5 or len(day_short_15m) < 5:
                 continue
 
             day_start_capital = capital
@@ -191,49 +191,49 @@ class GranularBacktestEngine:
             pos_capital = 0.0
             in_market = False
 
-            num_bars = min(len(day_tqqq_15m), len(day_sqqq_15m))
+            num_bars = min(len(day_long_15m), len(day_short_15m))
 
             for b_idx in range(num_bars):
-                row_l = day_tqqq_15m.iloc[b_idx]
-                row_s = day_sqqq_15m.iloc[b_idx]
+                row_l = day_long_15m.iloc[b_idx]
+                row_s = day_short_15m.iloc[b_idx]
                 current_time = row_l.name
 
                 # [Screen 1: 상위 60분봉 반도체 지수 & 20EMA/MACD 추세 확인]
-                past_soxx = soxx_60m[soxx_60m.index <= current_time]
-                past_tqqq_60 = tqqq_60m[tqqq_60m.index <= current_time]
-                past_sqqq_60 = sqqq_60m[sqqq_60m.index <= current_time]
+                past_trend = trend_60m[trend_60m.index <= current_time]
+                past_long_60 = long_60m[long_60m.index <= current_time]
+                past_short_60 = short_60m[short_60m.index <= current_time]
 
                 is_60m_bull = False
                 is_60m_bear = False
-                if len(past_soxx) >= 20 and len(past_tqqq_60) >= 20:
-                    last_soxx = past_soxx.iloc[-1]
-                    last_l60 = past_tqqq_60.iloc[-1]
-                    last_s60 = past_sqqq_60.iloc[-1] if len(past_sqqq_60) >= 20 else last_l60
+                if len(past_trend) >= 20 and len(past_long_60) >= 20:
+                    last_trend = past_trend.iloc[-1]
+                    last_l60 = past_long_60.iloc[-1]
+                    last_s60 = past_short_60.iloc[-1] if len(past_short_60) >= 20 else last_l60
 
-                    soxx_bull = (last_soxx['Close'] >= last_soxx['ema20'] * 0.998)
-                    tqqq_bull = (last_l60['Close'] >= last_l60['ema20'] * 0.998) and (last_l60['macd'] >= last_l60['macd_signal'] * 0.98)
-                    is_60m_bull = soxx_bull and tqqq_bull
+                    trend_bull = (last_trend['Close'] >= last_trend['ema20'] * 0.998)
+                    long_bull = (last_l60['Close'] >= last_l60['ema20'] * 0.998) and (last_l60['macd'] >= last_l60['macd_signal'] * 0.98)
+                    is_60m_bull = trend_bull and long_bull
 
-                    soxx_bear = (last_soxx['Close'] <= last_soxx['ema20'] * 1.002)
-                    sqqq_bull = (last_s60['Close'] >= last_s60['ema20'] * 0.998) and (last_s60['macd'] >= last_s60['macd_signal'] * 0.98)
-                    is_60m_bear = soxx_bear and sqqq_bull
+                    trend_bear = (last_trend['Close'] <= last_trend['ema20'] * 1.002)
+                    short_bull = (last_s60['Close'] >= last_s60['ema20'] * 0.998) and (last_s60['macd'] >= last_s60['macd_signal'] * 0.98)
+                    is_60m_bear = trend_bear and short_bull
 
                 # [Screen 2: 메인 15분봉 ML 확신도 Confidence >= 0.40 산출]
-                conf_tqqq = float(row_l.get('Confidence', 0.50))
-                conf_sqqq = float(row_s.get('Confidence', 0.50))
+                conf_long = float(row_l.get('Confidence', 0.50))
+                conf_short = float(row_s.get('Confidence', 0.50))
 
                 # [Screen 3: 하위 3분/5분봉 단기 눌림목(Dip/Support) 정밀 타점 확인]
-                tqqq_dip_ok = (row_l['VWAP_Diff'] <= 1.5) and (row_l['RSI_14'] <= 62.0) and (row_l['Close'] >= row_l['BB_Lower'] * 1.001)
-                sqqq_dip_ok = (row_s['VWAP_Diff'] <= 1.5) and (row_s['RSI_14'] <= 62.0) and (row_s['Close'] >= row_s['BB_Lower'] * 1.001)
+                long_dip_ok = (row_l['VWAP_Diff'] <= 1.5) and (row_l['RSI_14'] <= 62.0) and (row_l['Close'] >= row_l['BB_Lower'] * 1.001)
+                short_dip_ok = (row_s['VWAP_Diff'] <= 1.5) and (row_s['RSI_14'] <= 62.0) and (row_s['Close'] >= row_s['BB_Lower'] * 1.001)
 
                 # 1. 포지션 미보유 시: 3중 스크린 진입 검사
                 if current_pos == "NONE":
                     if b_idx < 1:  # 개장 직후 첫 봉 노이즈 배제
                         continue
 
-                    # TQQQ 스나이퍼 매수 (100% 자본금 투입)
-                    if is_60m_bull and (conf_tqqq >= self.confidence_threshold) and tqqq_dip_ok:
-                        current_pos = "TQQQ"
+                    # LONG_ETF 스나이퍼 매수 (100% 자본금 투입)
+                    if is_60m_bull and (conf_long >= self.confidence_threshold) and long_dip_ok:
+                        current_pos = config.TICKER_LONG
                         entry_price = float(row_l['Close'])
                         entry_time_str = str(current_time)
                         entry_bar_idx = b_idx
@@ -242,9 +242,9 @@ class GranularBacktestEngine:
                         total_trades += 1
                         in_market = True
 
-                    # SQQQ 스나이퍼 매수 (하락장 배팅, 100% 자본금 투입)
-                    elif is_60m_bear and (conf_sqqq >= self.confidence_threshold) and sqqq_dip_ok:
-                        current_pos = "SQQQ"
+                    # SHORT_ETF 스나이퍼 매수 (하락장 배팅, 100% 자본금 투입)
+                    elif is_60m_bear and (conf_short >= self.confidence_threshold) and short_dip_ok:
+                        current_pos = config.TICKER_SHORT
                         entry_price = float(row_s['Close'])
                         entry_time_str = str(current_time)
                         entry_bar_idx = b_idx
@@ -257,7 +257,7 @@ class GranularBacktestEngine:
 
                 # 2. 포지션 보유 중: 익절(+3.0%), 손절(-2.0%), 90분 타임스탑, 장마감 청산
                 if in_market and current_pos != "NONE":
-                    curr_row = row_l if current_pos == "TQQQ" else row_s
+                    curr_row = row_l if current_pos == config.TICKER_LONG else row_s
                     curr_high = float(curr_row['High'])
                     curr_low = float(curr_row['Low'])
                     curr_close = float(curr_row['Close'])
@@ -275,10 +275,10 @@ class GranularBacktestEngine:
                         all_closed_trades.append(actual_ret)
                         day_wins += 1
                         total_wins += 1
-                        if current_pos == "TQQQ":
-                            tqqq_wins += 1
+                        if current_pos == config.TICKER_LONG:
+                            long_wins += 1
                         else:
-                            sqqq_wins += 1
+                            short_wins += 1
 
                         all_trade_records.append({
                             "trade_id": f"TRD_{trade_id_seq:04d}",
@@ -307,10 +307,10 @@ class GranularBacktestEngine:
                         all_closed_trades.append(actual_ret)
                         day_losses += 1
                         total_losses += 1
-                        if current_pos == "TQQQ":
-                            tqqq_losses += 1
+                        if current_pos == config.TICKER_LONG:
+                            long_losses += 1
                         else:
-                            sqqq_losses += 1
+                            short_losses += 1
 
                         all_trade_records.append({
                             "trade_id": f"TRD_{trade_id_seq:04d}",
@@ -340,17 +340,17 @@ class GranularBacktestEngine:
                         if actual_ret >= 0:
                             day_wins += 1
                             total_wins += 1
-                            if current_pos == "TQQQ":
-                                tqqq_wins += 1
+                            if current_pos == config.TICKER_LONG:
+                                long_wins += 1
                             else:
-                                sqqq_wins += 1
+                                short_wins += 1
                         else:
                             day_losses += 1
                             total_losses += 1
-                            if current_pos == "TQQQ":
-                                tqqq_losses += 1
+                            if current_pos == config.TICKER_LONG:
+                                long_losses += 1
                             else:
-                                sqqq_losses += 1
+                                short_losses += 1
 
                         all_trade_records.append({
                             "trade_id": f"TRD_{trade_id_seq:04d}",
@@ -380,17 +380,17 @@ class GranularBacktestEngine:
                         if actual_ret >= 0:
                             day_wins += 1
                             total_wins += 1
-                            if current_pos == "TQQQ":
-                                tqqq_wins += 1
+                            if current_pos == config.TICKER_LONG:
+                                long_wins += 1
                             else:
-                                sqqq_wins += 1
+                                short_wins += 1
                         else:
                             day_losses += 1
                             total_losses += 1
-                            if current_pos == "TQQQ":
-                                tqqq_losses += 1
+                            if current_pos == config.TICKER_LONG:
+                                long_losses += 1
                             else:
-                                sqqq_losses += 1
+                                short_losses += 1
 
                         all_trade_records.append({
                             "trade_id": f"TRD_{trade_id_seq:04d}",
@@ -446,10 +446,10 @@ class GranularBacktestEngine:
         
         win_rate_pct = round((total_wins / (total_wins + total_losses) * 100), 1) if (total_wins + total_losses) > 0 else 0.0
 
-        tqqq_total = tqqq_wins + tqqq_losses
-        sqqq_total = sqqq_wins + sqqq_losses
-        tqqq_win_rate_pct = round((tqqq_wins / tqqq_total * 100), 1) if tqqq_total > 0 else 0.0
-        sqqq_win_rate_pct = round((sqqq_wins / sqqq_total * 100), 1) if sqqq_total > 0 else 0.0
+        long_total = long_wins + long_losses
+        short_total = short_wins + short_losses
+        long_win_rate_pct = round((long_wins / long_total * 100), 1) if long_total > 0 else 0.0
+        short_win_rate_pct = round((short_wins / short_total * 100), 1) if short_total > 0 else 0.0
 
         gross_profit = float(np.sum(wins_arr)) if len(wins_arr) > 0 else 0.001
         gross_loss = float(abs(np.sum(losses_arr))) if len(losses_arr) > 0 else 0.001
@@ -465,12 +465,12 @@ class GranularBacktestEngine:
             "total_wins": total_wins,
             "total_losses": total_losses,
             "win_rate_pct": win_rate_pct,
-            "tqqq_wins": tqqq_wins,
-            "tqqq_losses": tqqq_losses,
-            "tqqq_win_rate_pct": tqqq_win_rate_pct,
-            "sqqq_wins": sqqq_wins,
-            "sqqq_losses": sqqq_losses,
-            "sqqq_win_rate_pct": sqqq_win_rate_pct,
+            "long_wins": long_wins,
+            "long_losses": long_losses,
+            "long_win_rate_pct": long_win_rate_pct,
+            "short_wins": short_wins,
+            "short_losses": short_losses,
+            "short_win_rate_pct": short_win_rate_pct,
             "profit_factor": profit_factor,
             "daily_reports": daily_reports,
             "weekly_reports": weekly_reports,

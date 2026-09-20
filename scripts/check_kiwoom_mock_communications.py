@@ -1,3 +1,4 @@
+import config
 import os
 import sys
 import json
@@ -70,9 +71,9 @@ def run_kiwoom_mock_comms_check():
         print("토큰 발급 실패로 인해 이후 TR 통신을 중단합니다.")
         return results
 
-    # 2. 외화 예수금 조회 통신 점검 (TR: ust21110, Endpoint: /api/us/acnt)
+    # 2. 외화 예수금 조회 통신 점검 (TR: kt00001, Endpoint: /api/domestic/acnt)
     print("\n" + "-" * 80)
-    print("2️⃣ [통신 체크 2] 외화 예수금 조회 (TR: ust21110 | /api/us/acnt)")
+    print("2️⃣ [통신 체크 2] 외화 예수금 조회 (TR: kt00001 | /api/domestic/acnt)")
     print("-" * 80)
     dep_start = time.time()
     try:
@@ -81,7 +82,7 @@ def run_kiwoom_mock_comms_check():
             "cano": broker.account_no,
             "acnt_prdt_cd": broker.account_type
         }
-        raw_dep_res = broker._send_tr_request(endpoint="/api/us/acnt", api_id="ust21110", body_dict=dep_body)
+        raw_dep_res = broker._send_tr_request(endpoint="/api/domestic/acnt", api_id="kt00001", body_dict=dep_body)
         dep_elapsed = round(time.time() - dep_start, 3)
         
         parsed_dep = broker.get_overseas_deposit()
@@ -107,9 +108,9 @@ def run_kiwoom_mock_comms_check():
         print(f"❌ 외화 예수금 조회 실패: {e}")
         results["2_foreign_deposit"] = {"status": "FAIL", "elapsed_sec": dep_elapsed, "error": str(e)}
 
-    # 3. 미국주식 원장 잔고/보유종목 조회 통신 점검 (TR: ust21070, Endpoint: /api/us/acnt)
+    # 3. 국내주식 원장 잔고/보유종목 조회 통신 점검 (TR: kt00018, Endpoint: /api/domestic/acnt)
     print("\n" + "-" * 80)
-    print("3️⃣ [통신 체크 3] 미국주식 원장 잔고/보유종목 조회 (TR: ust21070 | /api/us/acnt)")
+    print("3️⃣ [통신 체크 3] 국내주식 원장 잔고/보유종목 조회 (TR: kt00018 | /api/domestic/acnt)")
     print("-" * 80)
     bal_start = time.time()
     try:
@@ -118,7 +119,7 @@ def run_kiwoom_mock_comms_check():
             "acnt_prdt_cd": broker.account_type,
             "qry_tp": "1"
         }
-        raw_bal_res = broker._send_tr_request(endpoint="/api/us/acnt", api_id="ust21070", body_dict=bal_body)
+        raw_bal_res = broker._send_tr_request(endpoint="/api/domestic/acnt", api_id="kt00018", body_dict=bal_body)
         bal_elapsed = round(time.time() - bal_start, 3)
         parsed_bal = broker.get_overseas_stock_balance()
         
@@ -148,9 +149,9 @@ def run_kiwoom_mock_comms_check():
         print(f"❌ 원장 잔고 조회 실패: {e}")
         results["3_stock_balance"] = {"status": "FAIL", "elapsed_sec": bal_elapsed, "error": str(e)}
 
-    # 4. 체결/미체결 내역 조회 통신 점검 (TR: ust21050, Endpoint: /api/us/acnt)
+    # 4. 체결/미체결 내역 조회 통신 점검 (TR: kt00007, Endpoint: /api/domestic/acnt)
     print("\n" + "-" * 80)
-    print("4️⃣ [통신 체크 4] 체결/미체결 내역 조회 (TR: ust21050 | /api/us/acnt)")
+    print("4️⃣ [통신 체크 4] 체결/미체결 내역 조회 (TR: kt00007 | /api/domestic/acnt)")
     print("-" * 80)
     ord_start = time.time()
     try:
@@ -159,7 +160,7 @@ def run_kiwoom_mock_comms_check():
             "acnt_prdt_cd": broker.account_type,
             "qry_tp": "0"
         }
-        raw_open_res = broker._send_tr_request(endpoint="/api/us/acnt", api_id="ust21050", body_dict=ord_body)
+        raw_open_res = broker._send_tr_request(endpoint="/api/domestic/acnt", api_id="kt00007", body_dict=ord_body)
         ord_elapsed = round(time.time() - ord_start, 3)
         parsed_open = broker.get_open_orders()
         
@@ -184,12 +185,12 @@ def run_kiwoom_mock_comms_check():
         print(f"❌ 체결/미체결 내역 조회 실패: {e}")
         results["4_order_history"] = {"status": "FAIL", "elapsed_sec": ord_elapsed, "error": str(e)}
 
-    # 5. 미국주식 시세 조회 통신 점검 (TQQQ, SQQQ, NVDA)
+    # 5. 국내주식 시세 조회 통신 점검 (TQQQ, SQQQ, NVDA)
     print("\n" + "-" * 80)
-    print("5️⃣ [통신 체크 5] 미국주식 실시간 시세 조회 (TQQQ, SQQQ, NVDA)")
+    print("5️⃣ [통신 체크 5] 국내주식 실시간 시세 조회 (TQQQ, SQQQ, NVDA)")
     print("-" * 80)
     quotes = {}
-    for sym in ["TQQQ", "SQQQ", "NVDA"]:
+    for sym in [config.TICKER_LONG, config.TICKER_SHORT, config.MACRO_TICKER_2]:
         q_start = time.time()
         q = broker.get_stock_quote(sym)
         q_elapsed = round(time.time() - q_start, 3)
@@ -202,11 +203,11 @@ def run_kiwoom_mock_comms_check():
         }
     results["5_market_quotes"] = quotes
 
-    # 6. 미국주식 모의 주문 직접 신호 송출 및 리턴 수신 테스트 (TR: ust20000 매수 / ust20004 취소)
+    # 6. 국내주식 모의 주문 직접 신호 송출 및 리턴 수신 테스트 (TR: tt80010 매수 / tt80013 취소)
     print("\n" + "-" * 80)
-    print("6️⃣ [통신 체크 6] 키움 모의투자 실시간 매수 신호 송출 및 리턴 수신 (TR: ust20000 | /api/us/ordr)")
+    print("6️⃣ [통신 체크 6] 키움 모의투자 실시간 매수 신호 송출 및 리턴 수신 (TR: tt80010 | /api/domestic/ordr)")
     print("-" * 80)
-    test_sym = "TQQQ"
+    test_sym = config.TICKER_LONG
     quote_px = quotes.get(test_sym, {}).get("price", 28.50)
     # 현재가 대비 충분히 낮게 지정가 설정하여 바로 체결되지 않고 미체결로 생성되게 테스트 (취소 테스트 연계)
     test_limit_px = round(quote_px * 0.5, 2)  # 50% 낮은 가격으로 지정가 주문
@@ -239,10 +240,10 @@ def run_kiwoom_mock_comms_check():
             "raw_response": buy_res.get("raw_response")
         }
 
-        # 7. 방금 발생시킨 미체결 주문 취소 통신 점검 (TR: ust20004)
+        # 7. 방금 발생시킨 미체결 주문 취소 통신 점검 (TR: tt80013)
         if ord_no:
             print("\n" + "-" * 80)
-            print(f"7️⃣ [통신 체크 7] 방금 발주한 주문({ord_no}) 취소 신호 송출 (TR: ust20004 | /api/us/ordr)")
+            print(f"7️⃣ [통신 체크 7] 방금 발주한 주문({ord_no}) 취소 신호 송출 (TR: tt80013 | /api/domestic/ordr)")
             print("-" * 80)
             cancel_start = time.time()
             time.sleep(0.5) # 잠시 텀
@@ -268,13 +269,13 @@ def run_kiwoom_mock_comms_check():
         results["6_buy_order"] = {"status": "FAIL", "elapsed_sec": order_elapsed, "error": str(e)}
         results["7_cancel_order"] = {"status": "SKIPPED", "reason": "Buy order failed"}
 
-    # 8. 키움 실시간 WebSocket 통신 점검 (wss://mockapi.kiwoom.com:10000/api/us/websocket)
+    # 8. 키움 실시간 WebSocket 통신 점검 (wss://mockapi.kiwoom.com:10000/api/domestic/websocket)
     print("\n" + "-" * 80)
     print("8️⃣ [통신 체크 8] 실시간 웹소켓(WebSocket) 통신 연결 및 핸드셰이크 점검")
     print("-" * 80)
     
     async def check_ws_communication():
-        ws_url = "wss://mockapi.kiwoom.com:10000/api/us/websocket"
+        ws_url = "wss://mockapi.kiwoom.com:10000/api/domestic/websocket"
         print(f"🌐 WebSocket 연결 시도: {ws_url}")
         headers = {"authorization": f"Bearer {token}"}
         try:
@@ -299,7 +300,7 @@ def run_kiwoom_mock_comms_check():
                     "refresh": "1",
                     "data": [
                         {
-                            "item": [{"jmcode": "TQQQ", "stex_tp": "ND"}, {"jmcode": "SQQQ", "stex_tp": "ND"}],
+                            "item": [{"jmcode": config.TICKER_LONG, "stex_tp": "ND"}, {"jmcode": config.TICKER_SHORT, "stex_tp": "ND"}],
                             "type": ["0A", "0B", "FT"]
                         }
                     ]

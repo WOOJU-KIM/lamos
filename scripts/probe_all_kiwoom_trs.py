@@ -1,3 +1,4 @@
+import config
 import sys
 import json
 import urllib.request
@@ -51,7 +52,7 @@ for ep in endpoints:
         body = {
             "cano": broker.account_no,
             "acnt_prdt_cd": "01",
-            "symb": "TQQQ",
+            "symb": config.TICKER_LONG,
             "excd": "NAS",
             "ord_qty": "1",
             "ord_unpr": "0",

@@ -37,11 +37,11 @@ def run_retrain_gbdt_3class():
 
     # 1. 데이터 로드 (최근 504 거래일 롤링 윈도우 고정)
     print("\n⏳ [1/5] 시장 데이터 레이크(TQQQ 15m) 최근 504 거래일 롤링 윈도우 로드...")
-    df_15m = data_lake.load_rolling_candles("TQQQ", "15m", max_trading_days=504)
+    df_15m = data_lake.load_rolling_candles(config.TICKER_LONG, "15m", max_trading_days=504)
     if df_15m.empty or len(df_15m) < 100:
         print("⚠️ 로컬 DB 데이터 부족으로 Yahoo Finance에서 수집...")
-        data_lake.harvest_symbol("TQQQ", "15m", period="60d")
-        df_15m = data_lake.load_rolling_candles("TQQQ", "15m", max_trading_days=504)
+        data_lake.harvest_symbol(config.TICKER_LONG, "15m", period="60d")
+        df_15m = data_lake.load_rolling_candles(config.TICKER_LONG, "15m", max_trading_days=504)
 
     unique_days_count = len(df_15m.index.strftime('%Y-%m-%d').unique())
     print(f"   ✅ 총 {len(df_15m):,}개 15분봉 캔들 확보 완료 (최근 {unique_days_count}개 거래일 롤링 윈도우 적용)")

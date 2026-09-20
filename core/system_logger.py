@@ -96,4 +96,16 @@ class SystemLogger:
         return logs[-limit:]
 
 # Global Singleton
+    def info(self, *args, source: str = 'System'):
+        msg = ' '.join(map(str, args))
+        self.log('INFO', source, msg)
+
+    def error(self, *args, source: str = 'System'):
+        msg = ' '.join(map(str, args))
+        self.log('ERROR', source, msg)
+
+    def warn(self, *args, source: str = 'System'):
+        msg = ' '.join(map(str, args))
+        self.log('WARN', source, msg)
+
 system_logger = SystemLogger()

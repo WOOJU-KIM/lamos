@@ -206,7 +206,7 @@ class LiveExperienceLogger:
         row_dict = {
             "trade_id": trade_id,
             "mode": trade_data.get("mode", "VIRTUAL"),
-            "symbol": trade_data.get("symbol", "TQQQ"),
+            "symbol": trade_data.get("symbol", config.TICKER_LONG),
             "entry_time": entry_time_str,
             "exit_time": exit_time_str,
             "hold_minutes": hold_min,

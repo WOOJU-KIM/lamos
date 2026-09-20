@@ -78,7 +78,8 @@ class DispatcherAgent:
             retry_cnt = task["retry_count"]
             payload = {
                 "chat_id": self.chat_id,
-                "text": msg
+                "text": msg,
+                "parse_mode": "HTML"
             }
 
             success = False
@@ -139,8 +140,8 @@ class DispatcherAgent:
         tot_pnl = bt_results.get("total_pnl_krw", 2_438_395)
         tot_trades = bt_results.get("total_trades_count", 20)
         win_rate = bt_results.get("win_rate_pct", 65.0)
-        tqqq_wr = bt_results.get("tqqq_win_rate_pct", 87.5)
-        sqqq_wr = bt_results.get("sqqq_win_rate_pct", 50.0)
+        long_wr = bt_results.get("long_win_rate_pct", 87.5)
+        short_wr = bt_results.get("short_win_rate_pct", 50.0)
         pf = bt_results.get("profit_factor", 3.13)
         mdd = bt_results.get("mdd_pct", 3.96)
         
@@ -186,8 +187,8 @@ class DispatcherAgent:
 • 최종 잔고: {final_cap:,}원 ({ret_sign}{tot_pnl:,}원 / {ret_sign}{tot_ret:.2f}%)
 • 전체 승률: {win_rate}% (총 {tot_trades}회 거래 / {bt_results.get('total_wins', 13)}승 {bt_results.get('total_losses', 7)}패)
 • 손익비(PF): {pf} | 최대낙폭(MDD): -{mdd:.2f}%
-• TQQQ 승률: {tqqq_wr}% (8회 중 7승 1패)
-• SQQQ 승률: {sqqq_wr}% (12회 중 6승 6패)
+• TQQQ 승률: {long_wr}% (8회 중 7승 1패)
+• SQQQ 승률: {short_wr}% (12회 중 6승 6패)
 • 핵심 기여 지표 Top 3: {top_feat_str}
 
 ⚙️ 적용된 챔피언 매매 룰

@@ -1,3 +1,4 @@
+import config
 import sqlite3
 import sys
 import pandas as pd
@@ -5,7 +6,7 @@ import numpy as np
 
 def test_fading():
     conn = sqlite3.connect('data/market_data.db')
-    df_5m = pd.read_sql_query("SELECT symbol, datetime, open, high, low, close, volume FROM market_candles WHERE timeframe='5m' AND symbol IN ('TQQQ', 'SQQQ')", conn)
+    df_5m = pd.read_sql_query("SELECT symbol, datetime, open, high, low, close, volume FROM market_candles WHERE timeframe='5m' AND symbol IN (config.TICKER_LONG, config.TICKER_SHORT)", conn)
     df_5m['datetime'] = pd.to_datetime(df_5m['datetime'])
     df_5m['date'] = df_5m['datetime'].dt.strftime('%Y-%m-%d')
     df_5m['time'] = df_5m['datetime'].dt.strftime('%H:%M')
@@ -20,8 +21,8 @@ def test_fading():
     for min_trend in [1.5, 2.0, 2.5, 3.0]:
         results = []
         for d in unique_dates:
-            sub_l = df_5m[(df_5m['date'] == d) & (df_5m['symbol'] == 'TQQQ')].sort_values('time')
-            sub_s = df_5m[(df_5m['date'] == d) & (df_5m['symbol'] == 'SQQQ')].sort_values('time')
+            sub_l = df_5m[(df_5m['date'] == d) & (df_5m['symbol'] == config.TICKER_LONG)].sort_values('time')
+            sub_s = df_5m[(df_5m['date'] == d) & (df_5m['symbol'] == config.TICKER_SHORT)].sort_values('time')
             if len(sub_l) < 50 or len(sub_s) < 50: continue
 
             b_open = sub_l[sub_l['time'] == '09:30']
@@ -45,10 +46,10 @@ def test_fading():
 
             # FADING: If up > min_trend -> Buy SQQQ (Short TQQQ)
             if day_ret >= min_trend:
-                sym = 'SQQQ'; target_post = post_s; entry_base = c_1430_s
+                sym = config.TICKER_SHORT; target_post = post_s; entry_base = c_1430_s
             # If down < -min_trend -> Buy TQQQ (Long TQQQ)
             elif day_ret <= -min_trend:
-                sym = 'TQQQ'; target_post = post_l; entry_base = c_1430_l
+                sym = config.TICKER_LONG; target_post = post_l; entry_base = c_1430_l
 
             if sym is None: continue
 

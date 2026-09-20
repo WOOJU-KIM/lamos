@@ -1,3 +1,4 @@
+import config
 import asyncio
 import json
 import logging
@@ -27,7 +28,7 @@ if not logger.handlers:
 class KiwoomWebSocketStreamer:
     """
     [Lumos 고성능 실시간 웹소켓(WebSocket) 스트리밍 엔진]
-    - 키움증권 해외주식 실시간 틱/호가(ust01000) 및 체결 통보를 밀리초(ms) 단위 이벤트 수신
+    - 키움증권 국내주식 실시간 틱/호가(ust01000) 및 체결 통보를 밀리초(ms) 단위 이벤트 수신
     - 콜백 함수(on_tick)를 통해 +3.0% 익절 / -2.0% 손절 / ATR 조건 도달 즉시 0.01초 즉시 발주
     - 연결 단절 시 자동 재접속(Auto-Reconnect) 및 REST API 하이브리드 자동 백업 지원
     """
@@ -35,13 +36,13 @@ class KiwoomWebSocketStreamer:
         self.broker = broker or KiwoomBroker()
         self.is_simulation = self.broker.is_simulation
         
-        # WebSocket Base URL (공식 포트 10000 / 미국주식 엔드포인트)
+        # WebSocket Base URL (공식 포트 10000 / 국내주식 엔드포인트)
         if self.is_simulation:
-            self.ws_url = "wss://mockapi.kiwoom.com:10000/api/us/websocket"
+            self.ws_url = "wss://mockapi.kiwoom.com:10000/api/domestic/websocket"
         else:
-            self.ws_url = "wss://api.kiwoom.com:10000/api/us/websocket"
+            self.ws_url = "wss://api.kiwoom.com:10000/api/domestic/websocket"
 
-        self.subscribed_symbols: List[str] = ["SOXL", "SOXS", "TQQQ", "SQQQ", "SOXX", "NVDA", "QQQ", "VIXY", "IEF"]
+        self.subscribed_symbols: List[str] = config.TRADE_SYMBOLS.copy()
         self.latest_prices: Dict[str, float] = {}
         self.latest_ticks: Dict[str, Dict[str, Any]] = {}
         self.ws_tick_received: Dict[str, bool] = {}     # 실제 WebSocket 틱 수신 여부 {symbol: bool}
@@ -103,7 +104,7 @@ class KiwoomWebSocketStreamer:
         return default if default is not None else 0.0
 
     async def _perform_handshake_and_subscribe(self, websocket, token: str):
-        """키움 WebSocket LOGIN 인증 및 미국주식 REG 종목 구독 등록"""
+        """키움 WebSocket LOGIN 인증 및 국내주식 REG 종목 구독 등록"""
         # 1. LOGIN 인증 패킷 송출
         login_packet = {
             "trnm": "LOGIN",
@@ -119,14 +120,14 @@ class KiwoomWebSocketStreamer:
         self.ws_auth_success = True
         logger.info(f"🔑 [WebSocket LOGIN 인증 성공] {login_res.get('return_msg', '정상 세션 연결')}")
 
-        # 2. 미국주식 REG 종목 실시간 구독 등록
+        # 2. 국내주식 REG 종목 실시간 구독 등록
         reg_packet = {
             "trnm": "REG",
             "grp_no": "1",
             "refresh": "1",
             "data": [
                 {
-                    "item": [{"jmcode": sym, "stex_tp": "NY" if sym in ["SOXL", "SOXS", "SPY", "DIA", "VIXY"] else "ND"} for sym in self.subscribed_symbols],
+                    "item": [{"jmcode": sym, "stex_tp": "NY" if sym in ["SOXL", "SOXS", "SPY", "DIA", config.MACRO_TICKER_3] else "ND"} for sym in self.subscribed_symbols],
                     "type": ["0A", "0B", "FT"]
                 }
             ]
@@ -209,13 +210,13 @@ class KiwoomWebSocketStreamer:
                         vals = d_item.get("values", d_item)
 
                         # 체결 통보 (0C, CHEG, ORDER 또는 주문번호/체결수량 필드 보유 시)
-                        # ※ 주의: FT는 해외주식 10단계 호가(Ask/Bid) 시세 패킷이므로 체결 통보에서 반드시 제외
+                        # ※ 주의: FT는 국내주식 10단계 호가(Ask/Bid) 시세 패킷이므로 체결 통보에서 반드시 제외
                         if (real_type in ["0C", "CHEG", "ORDER"] and real_type != "FT") or any(k in vals for k in ["odno", "ord_no", "order_no", "ft_tot_ccld_qty", "acc_filled_qty"]):
                             logger.info(f"🔔 [WebSocket 실시간 체결 통보 포착 (배열)]: {vals}")
                             self._dispatch_execution_event(vals)
                             continue
 
-                        # 시세/틱 데이터 (0A: 체결가, 0B: 호가, FT: 해외주식 실시간 호가/시세 등)
+                        # 시세/틱 데이터 (0A: 체결가, 0B: 호가, FT: 국내주식 실시간 호가/시세 등)
                         s = str(d_item.get("item", "") or d_item.get("jmcode", "") or vals.get("symbol", "")).strip().upper()
                         p_float = 0.0
 

@@ -1,3 +1,4 @@
+import config
 import sys
 import os
 import json
@@ -47,7 +48,7 @@ for endpoint, api_id in candidate_apis:
     body = {
         "cano": kb.account_no,
         "acnt_prdt_cd": kb.account_type,
-        "symb": "TQQQ",
+        "symb": config.TICKER_LONG,
         "excd": "NAS",
         "ord_qty": "1",
         "ord_unpr": "0",

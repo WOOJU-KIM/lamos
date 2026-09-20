@@ -1,3 +1,4 @@
+import config
 import os
 import sys
 import time
@@ -24,7 +25,7 @@ HEADERS = {
     "APCA-API-SECRET-KEY": ALPACA_SECRET_KEY
 }
 
-SYMBOLS = ["TQQQ", "SQQQ", "SOXX", "QQQ", "NVDA", "VIXY", "IEF"]
+SYMBOLS = [config.TICKER_LONG, config.TICKER_SHORT, config.TICKER_TREND, config.MACRO_TICKER_1, config.MACRO_TICKER_2, config.MACRO_TICKER_3, config.MACRO_TICKER_4]
 
 def fetch_alpaca_5m(symbol: str, start_iso: str, end_iso: str) -> pd.DataFrame:
     url = f"https://data.alpaca.markets/v2/stocks/{symbol}/bars"

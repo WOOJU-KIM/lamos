@@ -1,3 +1,4 @@
+import config
 from google import genai
 from typing import Dict, Any
 import json
@@ -32,8 +33,8 @@ class StrategyAgent:
 
 [현재 시장 국면 (Market Regime)]
 - 국면명: {regime_name} (모드: {regime_mode})
-- TQQQ 가중치 배수: {regime_params.get('tqqq_weight_mult', 1.0)}x
-- SQQQ 가중치 배수: {regime_params.get('sqqq_weight_mult', 0.5)}x
+- TQQQ 가중치 배수: {regime_params.get('long_weight_mult', 1.0)}x
+- SQQQ 가중치 배수: {regime_params.get('short_weight_mult', 0.5)}x
 - 국면 권장 선제 진입: {regime_params.get('dip_buy_threshold_pct', -1.0):+.2f}%
 - 국면 권장 손절선: {regime_params.get('stop_loss_pct', -2.0):+.2f}%
 - 국면 권장 헷지 스위칭: {regime_params.get('hedge_switch_threshold_pct', -1.5):+.2f}%
@@ -50,7 +51,7 @@ class StrategyAgent:
 ```json
 {{
   "action": "BUY_TQQQ_DIP" | "STOP_LOSS_TQQQ" | "SWITCH_SQQQ_HEDGE" | "HOLD_TQQQ" | "HOLD_SQQQ" | "WAIT_CASH",
-  "target_asset": "TQQQ" | "SQQQ" | "CASH",
+  "target_asset": config.TICKER_LONG | config.TICKER_SHORT | "CASH",
   "confidence_score": 1~100 (정수),
   "rationale": "국면 및 활성 로직 파라미터 기반 분석 근거 (3~4문장)",
   "entry_target_price": "진입 권장 가격대 (예: $142.00 ~ $142.80)",
@@ -88,7 +89,7 @@ JSON 형식으로 정밀하게 전략을 수립하세요."""
         except Exception:
             parsed = {
                 "action": "BUY_TQQQ_DIP",
-                "target_asset": "TQQQ",
+                "target_asset": config.TICKER_LONG,
                 "confidence_score": 85,
                 "rationale": "국면 지표 및 활성 로직 파라미터 기준 눌림목 분할 진입 유효.",
                 "entry_target_price": "장중 현재가 분할 진입",

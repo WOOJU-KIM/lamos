@@ -59,19 +59,19 @@ class WeeklyTournament:
 
     def _prepare_market_data_cache(self) -> Dict[str, Any]:
         """고속 전구간 MoE 백테스트를 위한 멀티 타임프레임 및 피처 사전 캐싱"""
-        print("⏳ [1/5] 데이터 레이크에서 15m/5m/60m 및 거시 지표 데이터 로드 중...")
-        tqqq_15m = self.data_lake.load_candles("TQQQ", "15m")
-        sqqq_15m = self.data_lake.load_candles("SQQQ", "15m")
-        tqqq_5m  = self.data_lake.load_candles("TQQQ", "5m")
-        sqqq_5m  = self.data_lake.load_candles("SQQQ", "5m")
-        soxx_60m = self.data_lake.load_candles("SOXX", "60m")
-        tqqq_60m = self.data_lake.load_candles("TQQQ", "60m")
-        soxx_15m = self.data_lake.load_candles("SOXX", "15m")
-        nvda_15m = self.data_lake.load_candles("NVDA", "15m")
-        qqq_15m  = self.data_lake.load_candles("QQQ", "15m")
-        vix_15m  = self.data_lake.load_candles("^VIX", "15m")
+        system_logger.info("⏳ [1/5] 데이터 레이크에서 15m/5m/60m 및 거시 지표 데이터 로드 중...")
+        long_15m = self.data_lake.load_candles(config.TICKER_LONG, "15m")
+        short_15m = self.data_lake.load_candles(config.TICKER_SHORT, "15m")
+        long_5m  = self.data_lake.load_candles(config.TICKER_LONG, "5m")
+        short_5m  = self.data_lake.load_candles(config.TICKER_SHORT, "5m")
+        trend_60m = self.data_lake.load_candles(config.TICKER_TREND, "60m")
+        long_60m = self.data_lake.load_candles(config.TICKER_LONG, "60m")
+        trend_15m = self.data_lake.load_candles(config.TICKER_TREND, "15m")
+        nvda_15m = self.data_lake.load_candles(config.MACRO_TICKER_2, "15m")
+        qqq_15m  = self.data_lake.load_candles(config.MACRO_TICKER_1, "15m")
+        vix_15m  = self.data_lake.load_candles(config.MACRO_TICKER_3, "15m")
 
-        for df in [tqqq_15m, sqqq_15m, tqqq_5m, sqqq_5m, soxx_60m, tqqq_60m, soxx_15m, nvda_15m, qqq_15m, vix_15m]:
+        for df in [long_15m, short_15m, long_5m, short_5m, trend_60m, long_60m, trend_15m, nvda_15m, qqq_15m, vix_15m]:
             if df.empty:
                 continue
             if 'datetime' in df.columns:
@@ -84,79 +84,79 @@ class WeeklyTournament:
                 df['time_str'] = df['datetime_dt'].dt.strftime('%H:%M')
 
         # 60m EMA20 사전 계산
-        if not soxx_60m.empty:
-            soxx_60m['ema20'] = soxx_60m['Close'].ewm(span=20, adjust=False).mean()
-        if not tqqq_60m.empty:
-            tqqq_60m['ema20'] = tqqq_60m['Close'].ewm(span=20, adjust=False).mean()
+        if not trend_60m.empty:
+            trend_60m['ema20'] = trend_60m['Close'].ewm(span=20, adjust=False).mean()
+        if not long_60m.empty:
+            long_60m['ema20'] = long_60m['Close'].ewm(span=20, adjust=False).mean()
 
         # 15m 공통 피처 추출
         ml_fe = MLFeatureEngine(confidence_threshold=self.confidence_threshold)
-        tqqq_15m_feat = ml_fe.extract_features(tqqq_15m)
-        sqqq_15m_feat = ml_fe.extract_features(sqqq_15m)
-        sqqq_15m_feat.set_index('datetime', inplace=True, drop=False)
+        long_15m_feat = ml_fe.extract_features(long_15m)
+        short_15m_feat = ml_fe.extract_features(short_15m)
+        short_15m_feat.set_index('datetime', inplace=True, drop=False)
 
         # 크로스에셋 거시 신호 사전 계산 (NVDA, SOXX, QQQ, VIX 5봉 수익률 기반)
         cross_mod = CrossAssetDislocationModel(dislocation_z_threshold=1.6)
         nvda_map = nvda_15m.set_index('datetime')['Close'].to_dict() if not nvda_15m.empty else {}
-        soxx_map = soxx_15m.set_index('datetime')['Close'].to_dict() if not soxx_15m.empty else {}
+        trend_map = trend_15m.set_index('datetime')['Close'].to_dict() if not trend_15m.empty else {}
         qqq_map = qqq_15m.set_index('datetime')['Close'].to_dict() if not qqq_15m.empty else {}
         vix_map = vix_15m.set_index('datetime')['Close'].to_dict() if not vix_15m.empty else {}
 
         cross_dirs = []
-        for idx in range(len(tqqq_15m_feat)):
-            row = tqqq_15m_feat.iloc[idx]
+        for idx in range(len(long_15m_feat)):
+            row = long_15m_feat.iloc[idx]
             dt = row['datetime']
-            tqqq_ret = float(row.get('ROC_5', 0.0)) / 100.0 if 'ROC_5' in row else 0.0
+            long_ret = float(row.get('ROC_5', 0.0)) / 100.0 if 'ROC_5' in row else 0.0
 
             n_px = nvda_map.get(dt)
-            sx_px = soxx_map.get(dt)
+            sx_px = trend_map.get(dt)
             q_px = qqq_map.get(dt)
             v_px = vix_map.get(dt)
 
             if idx >= 5 and n_px and q_px and v_px:
-                prev_dt = tqqq_15m_feat.iloc[idx - 5]['datetime']
+                prev_dt = long_15m_feat.iloc[idx - 5]['datetime']
                 prev_n = nvda_map.get(prev_dt, n_px)
-                prev_sx = soxx_map.get(prev_dt, sx_px) if sx_px else n_px
+                prev_sx = trend_map.get(prev_dt, sx_px) if sx_px else n_px
                 prev_q = qqq_map.get(prev_dt, q_px)
                 prev_v = vix_map.get(prev_dt, v_px)
 
                 nvda_ret = (n_px / prev_n - 1.0) if prev_n > 0 else 0.0
-                soxx_ret = (sx_px / prev_sx - 1.0) if (sx_px and prev_sx > 0) else nvda_ret
+                trend_ret = (sx_px / prev_sx - 1.0) if (sx_px and prev_sx > 0) else nvda_ret
                 qqq_ret = (q_px / prev_q - 1.0) if prev_q > 0 else 0.0
                 vix_ret = (v_px / prev_v - 1.0) if prev_v > 0 else 0.0
             else:
-                nvda_ret = soxx_ret = qqq_ret = vix_ret = 0.0
+                nvda_ret = trend_ret = qqq_ret = vix_ret = 0.0
 
             sig_code, _, _ = cross_mod.predict_signal(
-                tqqq_ret=tqqq_ret,
+                long_ret=long_ret,
                 nvda_ret=nvda_ret,
-                soxx_ret=soxx_ret,
+                trend_ret=trend_ret,
                 qqq_ret=qqq_ret,
                 vix_ret=vix_ret,
                 tnx_ret=0.0
             )
             if sig_code > 0:
-                cross_dirs.append("LONG_TQQQ")
+                cross_dirs.append(f"LONG_{config.TICKER_LONG}")
             elif sig_code < 0:
-                cross_dirs.append("SHORT_SQQQ")
+                cross_dirs.append(f"SHORT_{config.TICKER_SHORT}")
             else:
                 cross_dirs.append("HOLD")
 
-        tqqq_15m_feat['cross_dir'] = cross_dirs
-        unique_dates = sorted(tqqq_15m_feat['date_str'].unique())
+        long_15m_feat['cross_dir'] = cross_dirs
+        unique_dates = sorted(long_15m_feat['date_str'].unique())
 
         # 5분봉 날짜별 그룹핑 (고속 0ms 조회)
-        tqqq_5m_by_date = {d: df for d, df in tqqq_5m.groupby('date_str')} if not tqqq_5m.empty else {}
-        sqqq_5m_by_date = {d: df for d, df in sqqq_5m.groupby('date_str')} if not sqqq_5m.empty else {}
+        long_5m_by_date = {d: df for d, df in long_5m.groupby('date_str')} if not long_5m.empty else {}
+        short_5m_by_date = {d: df for d, df in short_5m.groupby('date_str')} if not short_5m.empty else {}
 
         return {
-            "tqqq_15m": tqqq_15m,
-            "tqqq_15m_feat": tqqq_15m_feat,
-            "sqqq_15m_feat": sqqq_15m_feat,
-            "tqqq_5m_by_date": tqqq_5m_by_date,
-            "sqqq_5m_by_date": sqqq_5m_by_date,
-            "soxx_60m": soxx_60m,
-            "tqqq_60m": tqqq_60m,
+            "long_15m": long_15m,
+            "long_15m_feat": long_15m_feat,
+            "short_15m_feat": short_15m_feat,
+            "long_5m_by_date": long_5m_by_date,
+            "short_5m_by_date": short_5m_by_date,
+            "trend_60m": trend_60m,
+            "long_60m": long_60m,
             "unique_dates": unique_dates,
             "ml_feature_names": ml_fe.feature_names
         }
@@ -193,7 +193,7 @@ class WeeklyTournament:
         - 최신 반도체 시장(TQQQ/SQQQ) 마이크로스트럭처에 가중치 부여된 LightGBM 모델 재학습
         """
         if df_15m is None:
-            df_15m = self.data_lake.load_rolling_candles("TQQQ", "15m", max_trading_days=504)
+            df_15m = self.data_lake.load_rolling_candles(config.TICKER_LONG, "15m", max_trading_days=504)
 
         ml = MLFeatureEngine(confidence_threshold=self.confidence_threshold)
         feat_df = ml.extract_features(df_15m)
@@ -320,35 +320,35 @@ class WeeklyTournament:
         T = self.confidence_threshold
 
         # 1. 15분봉 피처에 대해 후보 모델 확신도 컬럼 생성
-        tqqq_15m_scored = moe_obj.gbdt_engine.add_confidence_columns(cache['tqqq_15m_feat'].copy())
+        long_15m_scored = moe_obj.gbdt_engine.add_confidence_columns(cache['long_15m_feat'].copy())
 
-        tqqq_5m_by_date = cache['tqqq_5m_by_date']
-        sqqq_5m_by_date = cache['sqqq_5m_by_date']
-        sqqq_15m_feat = cache['sqqq_15m_feat']
-        soxx_60m = cache['soxx_60m']
-        tqqq_60m = cache['tqqq_60m']
+        long_5m_by_date = cache['long_5m_by_date']
+        short_5m_by_date = cache['short_5m_by_date']
+        short_15m_feat = cache['short_15m_feat']
+        trend_60m = cache['trend_60m']
+        long_60m = cache['long_60m']
         unique_dates = cache['unique_dates']
 
         trades = []
         equity_curve = [capital]
 
         # 날짜별 15분봉 슬라이스 인덱싱
-        scored_by_date = {d: df for d, df in tqqq_15m_scored.groupby('date_str')}
+        scored_by_date = {d: df for d, df in long_15m_scored.groupby('date_str')}
 
         for d_str in unique_dates:
-            day_tqqq_15 = scored_by_date.get(d_str)
-            if day_tqqq_15 is None or len(day_tqqq_15) < 5:
+            day_long_15 = scored_by_date.get(d_str)
+            if day_long_15 is None or len(day_long_15) < 5:
                 continue
 
-            day_tqqq_5 = tqqq_5m_by_date.get(d_str, pd.DataFrame())
-            day_sqqq_5 = sqqq_5m_by_date.get(d_str, pd.DataFrame())
+            day_long_5 = long_5m_by_date.get(d_str, pd.DataFrame())
+            day_short_5 = short_5m_by_date.get(d_str, pd.DataFrame())
 
             daily_stoploss_count = 0
             b_idx = 0
-            n_bars = len(day_tqqq_15)
+            n_bars = len(day_long_15)
 
             while b_idx < n_bars:
-                cur_row = day_tqqq_15.iloc[b_idx]
+                cur_row = day_long_15.iloc[b_idx]
                 time_str = cur_row['time_str']
                 cur_time = cur_row['datetime']
 
@@ -366,13 +366,15 @@ class WeeklyTournament:
                 dir_cross = cur_row.get('cross_dir', 'HOLD')
 
                 # [인터락 1] GBDT 공격수 트리거 (>= 60%)
-                is_gbdt_trigger = (dir_gbdt in ["LONG_TQQQ", "SHORT_SQQQ"]) and (conf_gbdt >= T)
+                is_gbdt_trigger = (dir_gbdt in [f"LONG_{config.TICKER_LONG}", f"SHORT_{config.TICKER_SHORT}"]) and (conf_gbdt >= T)
 
                 # [인터락 1-2] 크로스에셋 역풍 방패 (정반대 방향 Veto)
                 is_cross_veto = (
-                    (dir_gbdt == "LONG_TQQQ" and dir_cross == "SHORT_SQQQ") or
-                    (dir_gbdt == "SHORT_SQQQ" and dir_cross == "LONG_TQQQ")
+                    (dir_gbdt == f"LONG_{config.TICKER_LONG}" and dir_cross == f"SHORT_{config.TICKER_SHORT}") or
+                    (dir_gbdt == f"SHORT_{config.TICKER_SHORT}" and dir_cross == f"LONG_{config.TICKER_LONG}")
                 )
+                if not getattr(config, "USE_CROSS_ASSET_VETO", True):
+                    is_cross_veto = False
 
                 if not is_gbdt_trigger or is_cross_veto:
                     b_idx += 1
@@ -381,25 +383,28 @@ class WeeklyTournament:
                 direction = dir_gbdt
 
                 # [인터락 1-3] Screen 1: 60분봉 상위 추세
-                past_soxx_60 = soxx_60m[soxx_60m['datetime'] <= cur_time]
-                past_tqqq_60 = tqqq_60m[tqqq_60m['datetime'] <= cur_time]
+                past_trend_60 = trend_60m[trend_60m['datetime'] <= cur_time]
+                past_long_60 = long_60m[long_60m['datetime'] <= cur_time]
                 is_60m_trend_ok = True
-                if len(past_soxx_60) >= 20 and len(past_tqqq_60) >= 20:
-                    soxx_c = past_soxx_60['Close'].iloc[-1]
-                    tqqq_c = past_tqqq_60['Close'].iloc[-1]
-                    soxx_ema20 = past_soxx_60['ema20'].iloc[-1]
-                    tqqq_ema20 = past_tqqq_60['ema20'].iloc[-1]
-                    if direction == "LONG_TQQQ":
-                        is_60m_trend_ok = (soxx_c >= soxx_ema20 * 0.998) and (tqqq_c >= tqqq_ema20 * 0.998)
+                if len(past_trend_60) >= 20 and len(past_long_60) >= 20:
+                    trend_c = past_trend_60['Close'].iloc[-1]
+                    long_c = past_long_60['Close'].iloc[-1]
+                    trend_ema20 = past_trend_60['ema20'].iloc[-1]
+                    long_ema20 = past_long_60['ema20'].iloc[-1]
+                    if direction == f"LONG_{config.TICKER_LONG}":
+                        is_60m_trend_ok = (trend_c >= trend_ema20 * 0.998) and (long_c >= long_ema20 * 0.998)
                     else:
-                        is_60m_trend_ok = (soxx_c <= soxx_ema20 * 1.002)
+                        is_60m_trend_ok = (trend_c <= trend_ema20 * 1.002)
+
+                if not getattr(config, "USE_60M_TREND_FILTER", True):
+                    is_60m_trend_ok = True
 
                 if not is_60m_trend_ok:
                     b_idx += 1
                     continue
 
                 # [인터락 1-4] Screen 3: 단기 눌림목 타점 필터
-                if direction == "LONG_TQQQ":
+                if direction == f"LONG_{config.TICKER_LONG}":
                     vwap_diff = float(cur_row.get("VWAP_Diff", 0.0))
                     rsi_14 = float(cur_row.get("RSI_14", 50.0))
                     bb_lower = float(cur_row.get("BB_Lower", 0.0))
@@ -408,8 +413,8 @@ class WeeklyTournament:
                     if bb_lower > 0:
                         dip_ok = dip_ok and (cur_close >= bb_lower * 1.001)
                 else:
-                    if cur_time in sqqq_15m_feat.index:
-                        row_s = sqqq_15m_feat.loc[cur_time]
+                    if cur_time in short_15m_feat.index:
+                        row_s = short_15m_feat.loc[cur_time]
                         vwap_diff = float(row_s.get("VWAP_Diff", 0.0))
                         rsi_14 = float(row_s.get("RSI_14", 50.0))
                         bb_lower = float(row_s.get("BB_Lower", 0.0))
@@ -425,12 +430,12 @@ class WeeklyTournament:
                     continue
 
                 # 진입 확정!
-                chosen_symbol = "TQQQ" if direction == "LONG_TQQQ" else "SQQQ"
-                if chosen_symbol == "TQQQ":
+                chosen_symbol = config.TICKER_LONG if direction == f"LONG_{config.TICKER_LONG}" else config.TICKER_SHORT
+                if chosen_symbol == config.TICKER_LONG:
                     base_px = float(cur_row['Close'])
                 else:
-                    if cur_time in sqqq_15m_feat.index:
-                        base_px = float(sqqq_15m_feat.loc[cur_time]['Close'])
+                    if cur_time in short_15m_feat.index:
+                        base_px = float(short_15m_feat.loc[cur_time]['Close'])
                     else:
                         base_px = 40.0
 
@@ -442,7 +447,7 @@ class WeeklyTournament:
                     continue
 
                 # 5분봉 정밀 궤적 추적
-                target_5m_df = day_tqqq_5 if chosen_symbol == "TQQQ" else day_sqqq_5
+                target_5m_df = day_long_5 if chosen_symbol == config.TICKER_LONG else day_short_5
                 post_5m = target_5m_df[target_5m_df['datetime'] > cur_time]
                 if post_5m.empty:
                     b_idx += 1
@@ -569,10 +574,10 @@ class WeeklyTournament:
         5. SQLite 레지스트리 기록 및 텔레그램 공식 결과 보고서 발송
         """
         today_str = datetime.now().strftime("%Y-%m-%d")
-        print("=" * 80)
-        print(f"🏆  [Lumos 주간 3자 토너먼트 거버넌스 감사: {today_str}]  🏆")
-        print(f"🧠  평가 엔진: Lumos V3 실전 하이브리드 MoE (GBDT 60% + 크로스에셋 Veto + 3중 스크린 + 5분봉 궤적 청산)")
-        print("=" * 80)
+        system_logger.info("=" * 80)
+        system_logger.info(f"🏆  [Lumos 주간 3자 토너먼트 거버넌스 감사: {today_str}]  🏆")
+        system_logger.info(f"🧠  평가 엔진: Lumos V3 실전 하이브리드 MoE (GBDT 60% + 크로스에셋 Veto + 3중 스크린 + 5분봉 궤적 청산)")
+        system_logger.info("=" * 80)
         system_logger.log("INFO", "WeeklyTournament", f"🏆 주간 3자 토너먼트 거버넌스 감사 실행 ({today_str})")
 
         # 1. 시세 데이터 및 인디케이터 캐시
@@ -592,9 +597,9 @@ class WeeklyTournament:
         cand2_id = f"M-{datetime.now().strftime('%Y%m%d')}-REFRESH-504D"
 
         # [후보 3: 신규 하이퍼 튜닝 (단일 LightGBM 하이퍼파라미터 최적화)]
-        df_tqqq_504 = self.data_lake.load_rolling_candles("TQQQ", "15m", max_trading_days=504)
+        df_long_504 = self.data_lake.load_rolling_candles(config.TICKER_LONG, "15m", max_trading_days=504)
         ml_temp = MLFeatureEngine(confidence_threshold=self.confidence_threshold)
-        feat_df_504 = ml_temp.extract_features(df_tqqq_504)
+        feat_df_504 = ml_temp.extract_features(df_long_504)
         cand3_model, cand3_feats, cand3_top10, cand3_top3 = self._train_candidate_3_hyperparameter_tuned(feat_df_504)
         cand3_moe = MoEMetaOrchestrator(confidence_threshold=self.confidence_threshold, gbdt_threshold=self.confidence_threshold, mode="hybrid_v3")
         cand3_moe.gbdt_engine.model = cand3_model
@@ -604,17 +609,17 @@ class WeeklyTournament:
         cand3_id = f"M-{datetime.now().strftime('%Y%m%d')}-TUNED-GBDT"
 
         # 3. 실전 동일 MoE 백테스트 실행 (Apples to Apples 동일 구간 검증)
-        print("\n⏳ [2/5] [후보 1: 기존 챔피언] 실전 MoE 백테스트 평가 중...")
+        system_logger.info("\n⏳ [2/5] [후보 1: 기존 챔피언] 실전 MoE 백테스트 평가 중...")
         res_cand1 = self._backtest_moe_candidate(cand1_moe, cache)
-        print(f"   • [후보 1] 완료: 승률 {res_cand1['win_rate_pct']:.1f}% ({res_cand1['total_wins']}승 {res_cand1['total_losses']}패) | PF {res_cand1['profit_factor']:.2f} | 수익률 +{res_cand1['total_return_pct']:.2f}% | MDD -{res_cand1['mdd_pct']:.2f}% (종합점수: {res_cand1['score']:.1f}점)")
+        system_logger.info(f"   • [후보 1] 완료: 승률 {res_cand1['win_rate_pct']:.1f}% ({res_cand1['total_wins']}승 {res_cand1['total_losses']}패) | PF {res_cand1['profit_factor']:.2f} | 수익률 +{res_cand1['total_return_pct']:.2f}% | MDD -{res_cand1['mdd_pct']:.2f}% (종합점수: {res_cand1['score']:.1f}점)")
 
-        print("\n⏳ [3/5] [후보 2: 데이터 최신화] 실전 MoE 백테스트 평가 중...")
+        system_logger.info("\n⏳ [3/5] [후보 2: 데이터 최신화] 실전 MoE 백테스트 평가 중...")
         res_cand2 = self._backtest_moe_candidate(cand2_moe, cache)
-        print(f"   • [후보 2] 완료: 승률 {res_cand2['win_rate_pct']:.1f}% ({res_cand2['total_wins']}승 {res_cand2['total_losses']}패) | PF {res_cand2['profit_factor']:.2f} | 수익률 +{res_cand2['total_return_pct']:.2f}% | MDD -{res_cand2['mdd_pct']:.2f}% (종합점수: {res_cand2['score']:.1f}점)")
+        system_logger.info(f"   • [후보 2] 완료: 승률 {res_cand2['win_rate_pct']:.1f}% ({res_cand2['total_wins']}승 {res_cand2['total_losses']}패) | PF {res_cand2['profit_factor']:.2f} | 수익률 +{res_cand2['total_return_pct']:.2f}% | MDD -{res_cand2['mdd_pct']:.2f}% (종합점수: {res_cand2['score']:.1f}점)")
 
-        print("\n⏳ [4/5] [후보 3: 신규 하이퍼 튜닝] 실전 MoE 백테스트 평가 중...")
+        system_logger.info("\n⏳ [4/5] [후보 3: 신규 하이퍼 튜닝] 실전 MoE 백테스트 평가 중...")
         res_cand3 = self._backtest_moe_candidate(cand3_moe, cache)
-        print(f"   • [후보 3] 완료: 승률 {res_cand3['win_rate_pct']:.1f}% ({res_cand3['total_wins']}승 {res_cand3['total_losses']}패) | PF {res_cand3['profit_factor']:.2f} | 수익률 +{res_cand3['total_return_pct']:.2f}% | MDD -{res_cand3['mdd_pct']:.2f}% (종합점수: {res_cand3['score']:.1f}점)")
+        system_logger.info(f"   • [후보 3] 완료: 승률 {res_cand3['win_rate_pct']:.1f}% ({res_cand3['total_wins']}승 {res_cand3['total_losses']}패) | PF {res_cand3['profit_factor']:.2f} | 수익률 +{res_cand3['total_return_pct']:.2f}% | MDD -{res_cand3['mdd_pct']:.2f}% (종합점수: {res_cand3['score']:.1f}점)")
 
         # 4. 순위 정렬 및 1위 챔피언 확정
         candidates = [
@@ -664,17 +669,17 @@ class WeeklyTournament:
         is_champion_defended = (winner["candidate_type"] == "기존 챔피언 (Champion)")
 
         # 5. [핵심] 실제 거래 모델 즉시 디스크 적용 (Apply to Production)
-        print("\n⏳ [5/5] 선발 챔피언 모델 실전 적용 및 텔레그램 리포트 발송...")
+        system_logger.info("\n⏳ [5/5] 선발 챔피언 모델 실전 적용 및 텔레그램 리포트 발송...")
         winner_moe = winner["moe_obj"]
         winner_moe.confidence_threshold = self.confidence_threshold
         winner_moe.gbdt_threshold = self.confidence_threshold
         winner_moe.mode = "hybrid_v3"
 
         if is_champion_defended:
-            print(f"   🛡️ [챔피언 방어 성공] 기존 챔피언({winner['model_id']})이 최고 점수({winner['score']}점)로 실전 운용을 지속합니다.")
+            system_logger.info(f"   🛡️ [챔피언 방어 성공] 기존 챔피언({winner['model_id']})이 최고 점수({winner['score']}점)로 실전 운용을 지속합니다.")
             system_logger.log("INFO", "WeeklyTournament", f"🛡️ 챔피언 방어 완료: {winner['model_id']} (점수: {winner['score']}점)")
         else:
-            print(f"   🔄 [신규 챔피언 공식 승격 및 교체] {winner['candidate_type']} ({winner['model_id']}) ➔ 실전 모델 파일(model_champion.pkl) 교체 완료!")
+            system_logger.info(f"   🔄 [신규 챔피언 공식 승격 및 교체] {winner['candidate_type']} ({winner['model_id']}) ➔ 실전 모델 파일(model_champion.pkl) 교체 완료!")
             system_logger.log("INFO", "WeeklyTournament", f"🔄 신규 챔피언 승격 및 적용: {winner['candidate_type']} ({winner['model_id']})")
 
         joblib.dump(winner_moe, MOE_MODEL_PATH)
@@ -702,7 +707,7 @@ class WeeklyTournament:
         report = self._compose_tournament_report(today_str, candidates, winner)
         send_res = self.dispatcher.send_telegram_message(report)
         if send_res.get("ok"):
-            print("   🚀 >>> 주간 토너먼트 결산 성적표 텔레그램 발송 완료! <<< 🚀")
+            system_logger.info("   🚀 >>> 주간 토너먼트 결산 성적표 텔레그램 발송 완료! <<< 🚀")
 
         return {
             "eval_date": today_str,
