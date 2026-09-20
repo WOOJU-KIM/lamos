@@ -92,7 +92,7 @@ class SystemIntegrityRegressionTest(unittest.TestCase):
         # 서킷 브레이커 로직이 무효화되었으므로 _execute_buy_with_10s_chase가 
         # daily_stoploss_count>=3 때문에 즉각 False를 반환하지 않고 로직을 타다가 WS stream 에러 등으로 False를 반환할 수 있으나
         # "🚫 [진입 차단]" 로그가 남지 않음을 검증하는 것이 정확함
-        buy_res = runner._execute_buy_with_10s_chase(
+        buy_res = runner.order_engine._execute_buy_with_10s_chase(
             symbol="TQQQ",
             target_qty=10,
             ref_price=30.0,
@@ -102,7 +102,7 @@ class SystemIntegrityRegressionTest(unittest.TestCase):
         # buy_res가 True이거나 (모의투자 API 정상동작), False(소켓 에러 등)더라도 
         # 서킷브레이커 자체로 인해 아예 블락되는 건 아님을 확인함.
         
-        runner._reset_daily_circuit_breaker()
+        runner.state_tracker._reset_daily_circuit_breaker()
         print("✅ [Test 5 통과] 3-Out 서킷브레이커 영구 폐지 (신규 진입 차단 없음) 검증 완료")
 
     def test_6_hybrid_moe_single_trigger_logic(self):
