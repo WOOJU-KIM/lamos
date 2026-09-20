@@ -183,9 +183,9 @@ class KiwoomWebSocketStreamer:
                         px = float(quote.get("last_price", 0.0))
                         if px > 0:
                             self._update_price(sym, px, {"provider": "REST_FALLBACK", "quote": quote})
-                time.sleep(1.0)
+                time.sleep(config.WS_RECONNECT_DELAY_SEC)
             except Exception as e:
-                time.sleep(2.0)
+                time.sleep(config.WS_RECONNECT_DELAY_SEC * 2)
 
     def _process_message(self, raw_msg: str):
         """수신된 실시간 틱 데이터 및 주문/체결 통보 파싱 및 콜백 전파 (Kiwoom 0A/0B/0C/FT/CHEG 지원)"""

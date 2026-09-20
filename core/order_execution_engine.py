@@ -27,7 +27,7 @@ class OrderExecutionEngine:
             ws_filled = self._order_fills.get(order_no, 0)
             if ws_filled >= target_qty:
                 return True, ws_filled, 0
-            time.sleep(0.05)
+            time.sleep(config.ORDER_POLL_INTERVAL_SEC / 10.0)
 
         # ????? ????? 1?? ?
         stk_bal = self.broker.get_overseas_stock_balance()
@@ -160,7 +160,7 @@ class OrderExecutionEngine:
             )
             if ord_no_1:
                 self.broker.cancel_order(order_no=ord_no_1, symbol=symbol, quantity=unfilled_1)
-            time.sleep(0.5)
+            time.sleep(config.ORDER_POLL_INTERVAL_SEC)
 
             # ? ? ?? ???? 
             stk_bal_1 = self.broker.get_overseas_stock_balance(force_refresh=True)
@@ -286,7 +286,7 @@ class OrderExecutionEngine:
             )
             if ord_no_2:
                 self.broker.cancel_order(order_no=ord_no_2, symbol=symbol, quantity=unfilled_2)
-            time.sleep(0.5)
+            time.sleep(config.ORDER_POLL_INTERVAL_SEC)
 
             # ? ???  ?
             stk_bal_final = self.broker.get_overseas_stock_balance(force_refresh=True)
@@ -467,7 +467,7 @@ class OrderExecutionEngine:
 
                 if s_ord_no:
                     self.broker.cancel_order(order_no=s_ord_no, symbol=symbol, quantity=rem_qty)
-                    time.sleep(0.5)
+                    time.sleep(config.ORDER_POLL_INTERVAL_SEC)
 
         except Exception as e:
             system_logger.error(f"매도 추격 주문 에러: {e}")

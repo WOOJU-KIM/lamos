@@ -624,7 +624,7 @@ class KiwoomLiveRunner:
 
             except Exception as e:
                 system_logger.log("ERROR", "LiveRunner", f" ? : {e}")
-                time.sleep(1)
+                time.sleep(config.MAIN_LOOP_IDLE_SEC)
 
     def run_once_and_start_listener(self):
         """

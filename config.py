@@ -241,3 +241,11 @@ ML_HORIZON_BARS = 4               # AI 학습용 추세 탐색 윈도우 (15분봉 기준 4봉 
 
 # --- 4. Ticker Lists (Dynamic Iteration) ---
 TRADE_SYMBOLS = [TICKER_LONG, TICKER_SHORT]
+
+# 6. Polling & Delay Constants
+ORDER_POLL_INTERVAL_SEC = 0.5
+WS_RECONNECT_DELAY_SEC = 1.0
+API_REQUEST_THROTTLE_SEC = 0.6
+MAIN_LOOP_IDLE_SEC = 1.0
+TELEGRAM_POLL_INTERVAL_SEC = 2.0
+MOCK_TICK_INTERVAL_SEC = 0.1

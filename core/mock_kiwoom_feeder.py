@@ -102,7 +102,7 @@ class MockKiwoomFeeder:
                         for cb in self._callbacks:
                             cb(sym, price, {"type": "mock"})
             
-            time.sleep(0.1)
+            time.sleep(config.MOCK_TICK_INTERVAL_SEC)
             
         logger.info("✅ MockKiwoomFeeder 시뮬레이션 완료.")
         self.is_finished = True

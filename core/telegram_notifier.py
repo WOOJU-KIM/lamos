@@ -253,7 +253,7 @@ class TelegramNotifier:
                     logger.warning(f"⚠️ [Telegram Send Fail] Status: {resp.status_code} | Body: {resp.text}")
             except requests.exceptions.RequestException as e:
                 logger.warning(f"⚠️ [Telegram Connection Error] 시도 {attempt}/{self.max_retries}: {e}")
-                time.sleep(0.5 * attempt)
+                time.sleep(config.TELEGRAM_POLL_INTERVAL_SEC * attempt)
 
         logger.error(f"❌ [Telegram Final Failure] 최대 재시도({self.max_retries}회) 초과로 발송 실패")
         return {"ok": False, "error": "max_retries_exceeded", "text": text}
@@ -268,7 +268,7 @@ class TelegramNotifier:
                 self._send_http_request(item["text"])
                 self._queue.task_done()
                 # 텔레그램 메시지 간 안전 텀 (초당 20회 제한 준수)
-                time.sleep(0.1)
+                time.sleep(config.TELEGRAM_POLL_INTERVAL_SEC / 10.0)
             except queue.Empty:
                 continue
             except Exception as e:

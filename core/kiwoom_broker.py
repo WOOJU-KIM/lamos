@@ -233,7 +233,7 @@ class KiwoomBroker:
             # 🔁 HTTP 429 (유량 초과) 발생 시 0.6초 백오프 후 1회 자동 재시도
             if e.code == 429 and retry_count < 1:
                 logger.warning(f"⚠️ [HTTP 429 감지] {api_id} 0.6초 백오프 대기 후 1회 자동 재시도...")
-                time.sleep(0.6)
+                time.sleep(config.API_REQUEST_THROTTLE_SEC)
                 return self._send_tr_request(endpoint=endpoint, api_id=api_id, body_dict=body_dict, raise_on_error=raise_on_error, retry_count=retry_count + 1)
 
             if raise_on_error:
@@ -684,7 +684,7 @@ class KiwoomBroker:
 
         # 취소 반영 대기
         if cancel_results:
-            time.sleep(0.5)
+            time.sleep(config.API_REQUEST_THROTTLE_SEC)
 
         return cancel_results
 

@@ -46,7 +46,7 @@ def main():
         
         # 피더가 종료되었으면 루프 탈출
         if current_time is None:
-            time.sleep(0.1)
+            time.sleep(config.MOCK_TICK_INTERVAL_SEC)
             continue
             
         # 15분 단위로 AI 타점 평가 진행
@@ -82,7 +82,7 @@ def main():
                 with open(log_file, 'a', encoding='utf-8') as f:
                     f.write(test_log + '\n')
 
-        time.sleep(0.01)
+        time.sleep(config.MOCK_TICK_INTERVAL_SEC / 10.0)
 
 if __name__ == "__main__":
     main()
