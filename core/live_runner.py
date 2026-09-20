@@ -48,169 +48,119 @@ if not logger.handlers:
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)
 
-class USMarketCalendar:
+class KRMarketCalendar:
     """
-    [ ? (NYSE / NASDAQ) ??? ? ??????
-    - ????Daylight Saving Time) ?  (3??? ???~ 11?? ???
-    - ???? ?:
-      * ????(EDT): ?? 22:30 ~ ? 05:00
-      * ????(EST): ?? 23:30 ~ ? 06:00
-    - (???? ?????
-    - ?  ?? ?? ? ??
+    국내장(KOSPI/KOSDAQ) 영업시간 캘린더
+    - 정규장 오픈: 09:30 KST (모의투자 등을 고려하여 09:00 대신 09:30으로 늦춰서 안전하게 매매하는 경우도 있지만, KOSPI 기준 정규는 09:00)
+    - 우리는 09:00 ~ 15:30으로 설정.
     """
+
     @staticmethod
-    def get_market_status(now_dt: Optional[datetime] = None) -> Dict[str, Any]:
+    def get_market_status(now_dt: Optional[datetime]=None) -> Dict[str, Any]:
         if now_dt is None:
             now_dt = datetime.now()
-
-        ny_tz = ZoneInfo("America/New_York")
-        kst_tz = ZoneInfo("Asia/Seoul")
+        kst_tz = ZoneInfo('Asia/Seoul')
         
-        if now_dt is None:
-            now_local = datetime.now().astimezone()
-            now_ny = now_local.astimezone(ny_tz)
-            now_kst = now_local.astimezone(kst_tz)
-        elif now_dt.tzinfo is None:
+        if now_dt.tzinfo is None:
             now_kst = now_dt.replace(tzinfo=kst_tz)
-            now_ny = now_kst.astimezone(ny_tz)
         else:
-            now_ny = now_dt.astimezone(ny_tz)
             now_kst = now_dt.astimezone(kst_tz)
-        weekday_ny = now_ny.weekday()  # 0: Mon, ..., 4: Fri, 5: Sat, 6: Sun
-        ny_time = now_ny.time()
-
-        is_weekend = (weekday_ny >= 5)
+            
+        weekday_kst = now_kst.weekday()
+        kst_time = now_kst.time()
+        is_weekend = weekday_kst >= 5
         
-        market_open_time = dtime(9, 30)
-        trading_cutoff_time = dtime(15, 30)
-        eod_liquidation_time = dtime(15, 50)
-        market_close_time = dtime(16, 0)
-
-        is_regular_hours = (not is_weekend) and (market_open_time <= ny_time < market_close_time)
+        market_open_time = dtime(9, 0)
+        trading_cutoff_time = dtime(15, 15)
+        eod_liquidation_time = dtime(15, 15)
+        market_close_time = dtime(15, 30)
+        
+        is_regular_hours = not is_weekend and market_open_time <= kst_time < market_close_time
         is_phase2_allowed = False
-        is_trading_allowed = (not is_weekend) and (market_open_time <= ny_time < trading_cutoff_time)
+        is_trading_allowed = not is_weekend and market_open_time <= kst_time < trading_cutoff_time
         is_entry_allowed = is_trading_allowed
-        is_eod_liquidation_window = (not is_weekend) and (eod_liquidation_time <= ny_time < market_close_time)
-
+        is_eod_liquidation_window = not is_weekend and eod_liquidation_time <= kst_time < market_close_time
+        
         if is_regular_hours:
             next_open_kst = None
-            time_until_open_str = "   "
+            time_until_open_str = '   '
         else:
-            target_ny_date = now_ny.date()
+            target_kst_date = now_kst.date()
             if is_weekend:
-                days_ahead = (7 - weekday_ny)
-                target_ny_date += timedelta(days=days_ahead)
-            else:
-                if ny_time >= market_close_time:
-                    if weekday_ny == 4:
-                        target_ny_date += timedelta(days=3)
-                    else:
-                        target_ny_date += timedelta(days=1)
-            
-            next_open_ny = datetime.combine(target_ny_date, market_open_time, tzinfo=ny_tz)
-            next_open_kst = next_open_ny.astimezone(kst_tz)
+                days_ahead = 7 - weekday_kst
+                target_kst_date += timedelta(days=days_ahead)
+            elif kst_time >= market_close_time:
+                if weekday_kst == 4:
+                    target_kst_date += timedelta(days=3)
+                else:
+                    target_kst_date += timedelta(days=1)
+            next_open_kst = datetime.combine(target_kst_date, market_open_time, tzinfo=kst_tz)
             delta = next_open_kst - now_kst
             hours, remainder = divmod(int(delta.total_seconds()), 3600)
             mins, secs = divmod(remainder, 60)
-            time_until_open_str = f"{hours}hours {mins}mins"
-
+            time_until_open_str = f'{hours}hours {mins}mins'
+            
         if is_weekend:
-            day_name_kr = "Weekend"
-            session_name = "WEEKEND_CLOSED"
-            status_desc = f"주말 장 휴장 ({day_name_kr})"
+            day_name_kr = '주말'
+            session_name = 'WEEKEND_CLOSED'
+            status_desc = f'휴장일 ({day_name_kr})'
         elif not is_regular_hours:
-            if ny_time < market_open_time:
-                session_name = "PRE_MARKET_WAITING"
-                status_desc = "정규장 개장 대기 중"
+            if kst_time < market_open_time:
+                session_name = 'PRE_MARKET_WAITING'
+                status_desc = '개장 대기'
             else:
-                session_name = "AFTER_MARKET_CLOSED"
-                status_desc = "장 마감 (애프터마켓)"
+                session_name = 'AFTER_MARKET_CLOSED'
+                status_desc = '장 마감'
+        elif is_eod_liquidation_window:
+            session_name = 'EOD_LIQUIDATION'
+            status_desc = '마감전 100% 현금화'
+        elif is_trading_allowed:
+            session_name = 'REGULAR_MARKET_OPEN'
+            status_desc = '정규장 (15m Model C)'
         else:
-            if is_eod_liquidation_window:
-                session_name = "EOD_LIQUIDATION"
-                status_desc = "장마감 10분전 0% 오버나잇 청산 모드"
-            elif is_trading_allowed:
-                session_name = "REGULAR_MARKET_OPEN"
-                status_desc = "정규장 진행중 Phase 1 (15m Model C)"
-            elif is_phase2_allowed:
-                session_name = "POWER_HOUR_SNIPER"
-                status_desc = "정규장 진행중 Phase 2 (5m Sniper)"
-            else:
-                session_name = "REGULAR_MARKET_NO_ENTRY"
-                status_desc = "정규장 진입 금지 시간 (관망)"
-
-        is_dst = bool(now_ny.dst())
-
+            session_name = 'REGULAR_MARKET_NO_ENTRY'
+            status_desc = '신규 진입 금지'
+            
         return {
-            "is_open": is_regular_hours,
-            "is_entry_allowed": is_entry_allowed,
-            "is_trading_allowed": is_trading_allowed,
-            "is_phase2_allowed": is_phase2_allowed,
-            "is_weekend": is_weekend,
-            "is_eod_liquidation_window": is_eod_liquidation_window,
-            "session_name": session_name,
-            "status_desc": status_desc,
-            "now_kst_str": now_kst.strftime("%Y-%m-%d %H:%M:%S KST"),
-            "now_ny_str": now_ny.strftime("%Y-%m-%d %H:%M:%S %Z"),
-            "is_dst": is_dst,
-            "dst_text": "EDT" if is_dst else "EST",
-            "next_open_kst_str": next_open_kst.strftime("%Y-%m-%d (%a) %H:%M KST") if next_open_kst else "Open",
-            "time_until_open_str": time_until_open_str
+            'is_open': is_regular_hours, 
+            'is_entry_allowed': is_entry_allowed, 
+            'is_trading_allowed': is_trading_allowed, 
+            'is_phase2_allowed': is_phase2_allowed, 
+            'is_weekend': is_weekend, 
+            'is_eod_liquidation_window': is_eod_liquidation_window, 
+            'session_name': session_name, 
+            'status_desc': status_desc, 
+            'now_kst_str': now_kst.strftime('%Y-%m-%d %H:%M:%S KST'), 
+            'next_open_kst_str': next_open_kst.strftime('%Y-%m-%d (%a) %H:%M KST') if next_open_kst else 'Open', 
+            'time_until_open_str': time_until_open_str
         }
 
     @staticmethod
     def verify_time_synchronization() -> Dict[str, Any]:
-        """
-        [?  ??? ??1? ? ???? ????? ??
-        1. OS  ? ??? ???(ZoneInfo America/New_York) ??? ?
-        2. ????EDT: -13h ?) ?????EST: -14h ?) ? ? ??
-        3.  ??4?  ?(09:30~14:30 Phase 1 vs 14:30~15:30 Phase 2 vs 15:30 ??vs 15:50 EOD ?)
-        """
-        ny_tz = ZoneInfo("America/New_York")
-        kst_tz = ZoneInfo("Asia/Seoul")
+        kst_tz = ZoneInfo('Asia/Seoul')
         now_local = datetime.now().astimezone()
-        now_ny = now_local.astimezone(ny_tz)
         now_kst = now_local.astimezone(kst_tz)
-
-        # KST? NYT ???
-        delta_hours = round((now_kst.utcoffset().total_seconds() - now_ny.utcoffset().total_seconds()) / 3600.0, 1)
-        is_dst = bool(now_ny.dst())
-        expected_diff = 13.0 if is_dst else 14.0
-        time_sync_ok = (delta_hours == expected_diff)
-
-        #  ??4?  ?( ? ?????? ? ? ????
-        test_weekday = now_ny.date() - timedelta(days=now_ny.weekday())
-        test_p1 = datetime.combine(test_weekday, dtime(11, 0), tzinfo=ny_tz)
-        test_p2 = datetime.combine(test_weekday, dtime(15, 0), tzinfo=ny_tz)
-        test_cd = datetime.combine(test_weekday, dtime(15, 40), tzinfo=ny_tz)
-        test_eod = datetime.combine(test_weekday, dtime(15, 55), tzinfo=ny_tz)
-
-        s_p1 = USMarketCalendar.get_market_status(test_p1)
-        s_p2 = USMarketCalendar.get_market_status(test_p2)
-        s_cd = USMarketCalendar.get_market_status(test_cd)
-        s_eod = USMarketCalendar.get_market_status(test_eod)
-
-        switching_ok = (
-            s_p1["is_entry_allowed"] and not s_p1["is_eod_liquidation_window"] and
-            s_eod["is_eod_liquidation_window"] and not s_eod["is_entry_allowed"]
-        )
-
+        
+        # OS 시간대가 Asia/Seoul과 일치하는지 확인
+        delta_hours = round((now_local.utcoffset().total_seconds() - now_kst.utcoffset().total_seconds()) / 3600.0, 1)
+        time_sync_ok = delta_hours == 0.0
+        
+        test_weekday = now_kst.date() - timedelta(days=now_kst.weekday())
+        test_p1 = datetime.combine(test_weekday, dtime(11, 0), tzinfo=kst_tz)
+        test_eod = datetime.combine(test_weekday, dtime(15, 20), tzinfo=kst_tz)
+        
+        s_p1 = KRMarketCalendar.get_market_status(test_p1)
+        s_eod = KRMarketCalendar.get_market_status(test_eod)
+        
+        switching_ok = s_p1['is_entry_allowed'] and (not s_p1['is_eod_liquidation_window']) and s_eod['is_eod_liquidation_window'] and (not s_eod['is_entry_allowed'])
         all_ok = bool(time_sync_ok and switching_ok)
-
+        
         return {
-            "all_ok": all_ok,
-            "time_sync_ok": time_sync_ok,
-            "switching_ok": switching_ok,
-            "delta_hours": delta_hours,
-            "expected_diff": expected_diff,
-            "is_dst": is_dst,
-            "dst_text": "????EDT, 13? ?)" if is_dst else "????EST, 14? ?)",
-            "now_kst_str": now_kst.strftime("%Y-%m-%d %H:%M:%S KST"),
-            "now_ny_str": now_ny.strftime("%Y-%m-%d %H:%M:%S %Z"),
-            "checklist_items": [
-            ]
+            'all_ok': all_ok, 
+            'time_sync_ok': time_sync_ok, 
+            'switching_ok': switching_ok, 
+            'now_kst_str': now_kst.strftime('%Y-%m-%d %H:%M:%S KST')
         }
-
 
 class KiwoomLiveRunner:
     """
@@ -356,7 +306,7 @@ class KiwoomLiveRunner:
             return
 
         try:
-            mkt = USMarketCalendar.get_market_status()
+            mkt = KRMarketCalendar.get_market_status()
             if not mkt.get("is_open"):
                 return
 
@@ -538,7 +488,7 @@ class KiwoomLiveRunner:
         
         while True:
             try:
-                mkt = USMarketCalendar.get_market_status()
+                mkt = KRMarketCalendar.get_market_status()
                 current_session = mkt["session_name"]
 
                 if self._last_market_session != current_session:
@@ -685,7 +635,7 @@ class KiwoomLiveRunner:
         system_logger.info("\n" + "=" * 75)
         system_logger.info("?  [?  ??? ??  ? ???&  ??? ?  ?")
         system_logger.info("=" * 75)
-        sync_res = USMarketCalendar.verify_time_synchronization()
+        sync_res = KRMarketCalendar.verify_time_synchronization()
         for chk_item in sync_res["checklist_items"]:
             system_logger.info(f"   ??{chk_item}")
         if not sync_res["all_ok"]:
@@ -696,13 +646,13 @@ class KiwoomLiveRunner:
         system_logger.info("=" * 75)
 
         # 1.  ? ? ?
-        mkt_status = USMarketCalendar.get_market_status()
+        mkt_status = KRMarketCalendar.get_market_status()
         self._last_market_session = mkt_status["session_name"]
 
         system_logger.info(f"\n[1/3] ?  ? ? ??:")
         system_logger.info(f"   ??? ?: {mkt_status['status_desc']}")
         system_logger.info(f"   ??? ?: {mkt_status['now_kst_str']}")
-        system_logger.info(f"   ??? ?: {mkt_status['now_ny_str']} ({mkt_status['dst_text']})")
+        system_logger.info(f"   ??? ?: {mkt_status['now_kr_str']} ({mkt_status['dst_text']})")
         system_logger.info(f"   ??? : {mkt_status['next_open_kst_str']} (?? ?: {mkt_status['time_until_open_str']})")
 
         # 2. ? ?? ? ??
@@ -716,7 +666,7 @@ class KiwoomLiveRunner:
         ai_engine_desc = f"`Phase 1: 15m GBDT Model ({config.GBDT_CONFIDENCE_THRESHOLD*100:.0f}% 이상 진입 / 크로스에셋 Veto 방패 / GBDT Feature 융합)`"
         start_msg = f"""🏁 <b>[Lumos 라이브러너 기동] {self.broker.mode_str} 자동매매 프로세스 시작</b>
 🕒 <b>현재 시각:</b> `{mkt_status['now_kst_str']}`
-✅ <b>시계 동기화:</b> `100% 일치 (KST-NYT {sync_res['delta_hours']:.0f}h 시차 검증 완료)`
+✅ <b>시계 동기화:</b> `100% 일치 (KST-KST {sync_res['delta_hours']:.0f}h 시차 검증 완료)`
 📊 <b>시장 상태:</b> `{mkt_status['status_desc']}`
 ⏰ <b>정규장 개장:</b> `{mkt_status['next_open_kst_str']}` ({mkt_status['time_until_open_str']})
 🏦 <b>증권사 연동:</b> `{self.broker.broker_name} ({self.broker.mode_str})`

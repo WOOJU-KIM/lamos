@@ -52,12 +52,12 @@ class StateTracker:
         except Exception as e:
             system_logger.warn(f"???? ?? ?: {e}")
 
-    def _get_current_ny_date(self) -> str:
-        ny_tz = ZoneInfo("America/New_York")
-        return datetime.now().astimezone().astimezone(ny_tz).strftime("%Y-%m-%d")
+    def _get_current_kr_date(self) -> str:
+        kr_tz = ZoneInfo("America/New_York")
+        return datetime.now().astimezone().astimezone(kr_tz).strftime("%Y-%m-%d")
 
     def _load_daily_cb_state(self):
-        today_ny = self._get_current_ny_date()
+        today_ny = self._get_current_kr_date()
         if self._daily_cb_file.exists():
             try:
                 with open(self._daily_cb_file, "r", encoding="utf-8") as f:
@@ -73,7 +73,7 @@ class StateTracker:
         self.daily_circuit_breaker_triggered = False
 
     def _save_daily_cb_state(self):
-        today_ny = self._get_current_ny_date()
+        today_ny = self._get_current_kr_date()
         data = {
             "date": today_ny,
             "stoploss_count": self.daily_stoploss_count,

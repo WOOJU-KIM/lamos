@@ -125,13 +125,13 @@ class SystemIntegrityRegressionTest(unittest.TestCase):
         print("✅ [Test 6 통과] Lumos V3 하이브리드 MoE (GBDT 60% 단일 트리거 통과) 양방향 무결성 검증 완료")
 
     def test_7_time_synchronization_and_model_switching_integrity(self):
-        """[인터락 7] 투자 진행 필수 체크리스트: 글로벌 시간 동기화(KST-NYT) 및 모델 스위칭 스케줄 무결성 검증"""
-        from core.live_runner import USMarketCalendar
-        res = USMarketCalendar.verify_time_synchronization()
+        """[인터락 7] 투자 진행 필수 체크리스트: 글로벌 시간 동기화(KST) 및 모델 스위칭 스케줄 무결성 검증"""
+        from core.live_runner import KRMarketCalendar
+        res = KRMarketCalendar.verify_time_synchronization()
         self.assertTrue(res["all_ok"], f"🚨 [치명적 시간 오류] 시간 동기화 또는 모델 스위칭 스케줄 검증 실패: {res}")
-        self.assertTrue(res["time_sync_ok"], f"🚨 KST-NYT 시차 오류 ({res['delta_hours']}h != {res['expected_diff']}h)")
+        self.assertTrue(res["time_sync_ok"], "🚨 KST 시차 오류 (OS 로컬 시간이 한국 시간이 아닙니다)")
         self.assertTrue(res["switching_ok"], "🚨 Phase 1 / Phase 2 모델 스위칭 상호 배타성 충돌 발생!")
-        print("✅ [Test 7 통과] 글로벌 시간 동기화(KST-NYT) 및 모델 스위칭 스케줄 무결성 사전 검증 완료")
+        print("✅ [Test 7 통과] 글로벌 시간 동기화(KST) 및 모델 스위칭 스케줄 무결성 사전 검증 완료")
 
 if __name__ == "__main__":
     unittest.main()
