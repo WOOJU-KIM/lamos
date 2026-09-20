@@ -190,11 +190,11 @@ BUY_TIMEOUT_SEC = 3               # 매수 미체결 타임아웃
 
 SELL_TIMEOUT_SEC = 3              # 매도 미체결 타임아웃
 
-BUY_SLIPPAGE_ADJUST = 0.03        # 매수 호가 조정 (Ask + 0.03)
+BUY_SLIPPAGE_ADJUST = 10        # 매수 호가 추격 (ETF 2틱 = +10원)
 
-SELL_SLIPPAGE_ADJUST = 0.05       # 매도 호가 조정 (Bid - 0.05)
+SELL_SLIPPAGE_ADJUST = 15       # 매도 호가 덤핑 (ETF 3틱 = -15원)
 
-QTY_CALC_BUFFER = 0.05            # 수량 계산 시 가격 버퍼 (cur_px + 0.05)
+QTY_CALC_BUFFER = 15            # 수량 계산 시 가격 버퍼 (+15원)
 
 
 
@@ -234,10 +234,10 @@ NAME_LONG = "KODEX 레버리지"
 NAME_SHORT = "KODEX 200선물인버스2X"
 
 
-# 3. �ӽŷ��� �н� ���� (ML Training Targets)
-ML_TARGET_TP_PCT = 0.018          # AI �н��� ������(Label) Ÿ�� ����
-ML_TARGET_SL_PCT = 0.012          # AI �н��� ������(Label) Ÿ�� ����
-ML_HORIZON_BARS = 4               # AI �н��� �߼� Ž�� ������ (15�к� ���� 4�� = 60��)
+# 3. ӽŷ н  (ML Training Targets)
+ML_TARGET_TP_PCT = 0.018          # AI н (Label) Ÿ 
+ML_TARGET_SL_PCT = 0.012          # AI н (Label) Ÿ 
+ML_HORIZON_BARS = 4               # AI н ߼ Ž  (15к  4 = 60)
 
 # --- 4. Ticker Lists (Dynamic Iteration) ---
 TRADE_SYMBOLS = [TICKER_LONG, TICKER_SHORT]

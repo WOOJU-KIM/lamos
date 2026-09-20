@@ -566,7 +566,8 @@ class KiwoomLiveRunner:
                                     
                                     if cur_px > 0:
                                         conn_res = self.broker.test_connection()
-                                        usd_avail = float(conn_res.get("usd_order_available", 0.0))
+                                        krw_avail = float(conn_res.get("krw_order_available", 0.0) or conn_res.get("usd_order_available", 0.0))
+                                        usd_avail = krw_avail  # Alias for existing logic
                                         order_qty = int((usd_avail * config.MAX_ALLOCATION_RATIO) / (cur_px + config.QTY_CALC_BUFFER))
                                         
                                         if order_qty > 0:

@@ -79,20 +79,20 @@ class OrderExecutionEngine:
             cur_px = float(self.ws_streamer.get_latest_price(symbol, ref_price))
             if cur_px <= 0:
                 cur_px = ref_price
-            order_px_1 = round(cur_px + config.BUY_SLIPPAGE_ADJUST, 2)
+            order_px_1 = int(cur_px + config.BUY_SLIPPAGE_ADJUST)
 
-            system_logger.info(f"?? [1? ] {symbol} {target_qty}?@ ${order_px_1:.2f} ({self.order_timeout_buy_sec:.0f}? ???)")
+            system_logger.info(f"?? [1? ] {symbol} {target_qty}?@ {order_px_1:,}원 ({self.order_timeout_buy_sec:.0f}? ???)")
             ord_res_1 = self.broker.send_order(symbol=symbol, order_type="BUY", quantity=target_qty, price=order_px_1)
             ord_no_1 = str(ord_res_1.get("order_no", "")).strip()
 
             # ?  ?  (1? )
             mode_title = "? [?? ?]" if self.broker.is_simulation else "? [?? ??]"
             score_block = "\n".join([f"??**{k.upper()}:** `{v*100:.1f}??" for k, v in sorted(all_scores.items(), key=lambda x: x[1], reverse=True)])
-            buy_msg = f"""{mode_title} 신규 매수 주문 (1차)\n🚨 **브로커:** `{self.broker.broker_name} {self.broker.mode_str}`\n💡 **종목:** `{symbol}`\n📊 **수량:** `{target_qty}`\n💰 **주문가:** `${order_px_1:.2f}`\n\n🔥 **[GBDT 모델 확신도]**\n{score_block}\n\n🎯 **목표가:** `${tp_px:.2f}`\n🛡️ **손절가:** `${sl_px:.2f}`\n⏱️ **시간청산:** {time_stop_min}분"""
+            buy_msg = f"""{mode_title} 신규 매수 주문 (1차)\n🚨 **브로커:** `{self.broker.broker_name} {self.broker.mode_str}`\n💡 **종목:** `{symbol}`\n📊 **수량:** `{target_qty}`\n💰 **주문가:** `{order_px_1:,}원`\n\n🔥 **[GBDT 모델 확신도]**\n{score_block}\n\n🎯 **목표가:** `${tp_px:.2f}`\n🛡️ **손절가:** `${sl_px:.2f}`\n⏱️ **시간청산:** {time_stop_min}분"""
 
 
             self.dispatcher.send_telegram_message(buy_msg)
-            system_logger.log("TRADE", "AutoExecution", f"🚀 [{self.broker.broker_name}] {symbol} 1차 매수 진입 - {target_qty}주 @ ${order_px_1:.2f} (AI확신도: {top_conf:.1f}%)")
+            system_logger.log("TRADE", "AutoExecution", f"🚀 [{self.broker.broker_name}] {symbol} 1차 매수 진입 - {target_qty}주 @ {order_px_1:,}원 (AI확신도: {top_conf:.1f}%)")
 
             # 1. ???(?  ??0ms   ?)
             is_filled_1, filled_1, unfilled_1 = self._wait_for_fill(
@@ -106,8 +106,8 @@ class OrderExecutionEngine:
             if is_filled_1:
                 # 1??100%  ?! (??? ? ?? 100% ???
                 real_buy_px, real_qty = self._sync_real_ledger_entry(symbol, order_px_1, target_qty)
-                tp_px_dyn = round(real_buy_px * (1.0 + tp_pct / 100.0), 2) if real_buy_px > 0 else tp_px
-                sl_px_dyn = round(real_buy_px * (1.0 - sl_pct / 100.0), 2) if real_buy_px > 0 else sl_px
+                tp_px_dyn = int(real_buy_px * (1.0 + tp_pct / 100.0)) if real_buy_px > 0 else tp_px
+                sl_px_dyn = int(real_buy_px * (1.0 - sl_pct / 100.0)) if real_buy_px > 0 else sl_px
 
                 filled_pos = {
                     "symbol": symbol,
@@ -174,8 +174,8 @@ class OrderExecutionEngine:
             remaining_qty = target_qty - already_filled_qty
             if remaining_qty <= 0:
                 real_buy_px, real_qty = self._sync_real_ledger_entry(symbol, order_px_1, already_filled_qty)
-                tp_px_dyn = round(real_buy_px * (1.0 + tp_pct / 100.0), 2) if real_buy_px > 0 else tp_px
-                sl_px_dyn = round(real_buy_px * (1.0 - sl_pct / 100.0), 2) if real_buy_px > 0 else sl_px
+                tp_px_dyn = int(real_buy_px * (1.0 + tp_pct / 100.0)) if real_buy_px > 0 else tp_px
+                sl_px_dyn = int(real_buy_px * (1.0 - sl_pct / 100.0)) if real_buy_px > 0 else sl_px
 
                 filled_pos = {
                     "symbol": symbol,
@@ -213,11 +213,11 @@ class OrderExecutionEngine:
 
             # 2??? ???
             latest_px_2 = float(self.ws_streamer.get_latest_price(symbol, cur_px))
-            order_px_2 = round(latest_px_2 + config.BUY_SLIPPAGE_ADJUST, 2)
-            system_logger.info(f"??[2? ??(1/1)] {symbol} {remaining_qty}?@ ${order_px_2:.2f} ({self.order_timeout_buy_sec:.0f}? ???)")
+            order_px_2 = int(latest_px_2 + config.BUY_SLIPPAGE_ADJUST)
+            system_logger.info(f"??[2? ??(1/1)] {symbol} {remaining_qty}?@ {order_px_2:,}원 ({self.order_timeout_buy_sec:.0f}? ???)")
             ord_res_2 = self.broker.send_order(symbol=symbol, order_type="BUY", quantity=remaining_qty, price=order_px_2)
             ord_no_2 = str(ord_res_2.get("order_no", "")).strip()
-            system_logger.log("TRADE", "OrderChasing", f"⚠️ [1차 미체결] {symbol} 2차 추격 매수 발주 - {remaining_qty}주 @ ${order_px_2:.2f}")
+            system_logger.log("TRADE", "OrderChasing", f"⚠️ [1차 미체결] {symbol} 2차 추격 매수 발주 - {remaining_qty}주 @ {order_px_2:,}원")
 
             # 2. ???(?  ??0ms   ?)
             is_filled_2, filled_2, unfilled_2 = self._wait_for_fill(
@@ -232,8 +232,8 @@ class OrderExecutionEngine:
                 # 2??100%  ?! (??? ? ?? 100% ???
                 total_qty = already_filled_qty + remaining_qty
                 real_buy_px, real_qty = self._sync_real_ledger_entry(symbol, order_px_2, total_qty)
-                tp_px_dyn = round(real_buy_px * (1.0 + tp_pct / 100.0), 2) if real_buy_px > 0 else tp_px
-                sl_px_dyn = round(real_buy_px * (1.0 - sl_pct / 100.0), 2) if real_buy_px > 0 else sl_px
+                tp_px_dyn = int(real_buy_px * (1.0 + tp_pct / 100.0)) if real_buy_px > 0 else tp_px
+                sl_px_dyn = int(real_buy_px * (1.0 - sl_pct / 100.0)) if real_buy_px > 0 else sl_px
 
                 filled_pos = {
                     "symbol": symbol,
@@ -299,8 +299,8 @@ class OrderExecutionEngine:
 
             if final_filled > 0:
                 real_buy_px, real_qty = self._sync_real_ledger_entry(symbol, order_px_2, final_filled)
-                tp_px_dyn = round(real_buy_px * (1.0 + tp_pct / 100.0), 2) if real_buy_px > 0 else tp_px
-                sl_px_dyn = round(real_buy_px * (1.0 - sl_pct / 100.0), 2) if real_buy_px > 0 else sl_px
+                tp_px_dyn = int(real_buy_px * (1.0 + tp_pct / 100.0)) if real_buy_px > 0 else tp_px
+                sl_px_dyn = int(real_buy_px * (1.0 - sl_pct / 100.0)) if real_buy_px > 0 else sl_px
 
                 filled_pos = {
                     "symbol": symbol,
@@ -400,8 +400,8 @@ class OrderExecutionEngine:
                     order_label = "? ? ?(Market Order)"
                 else:
                     # ? ? ? (? ?? ? ?? ? ): Bid - $0.05 ????
-                    sell_px = max(0.01, round(latest_px - config.SELL_SLIPPAGE_ADJUST, 2)) if latest_px > 0 else 0.0
-                    order_label = f"?  ??(${sell_px:.2f})"
+                    sell_px = max(1, int(latest_px - config.SELL_SLIPPAGE_ADJUST)) if latest_px > 0 else 0.0
+                    order_label = f"?  ??({sell_px:,}원)"
 
                 system_logger.info(f"? [ ?  ({loop_retry}?)] {symbol} {quantity}?| {order_label} | ?: {reason_desc} ({self.order_timeout_sell_sec:.0f}? ??")
                 s_res = self.broker.send_order(symbol=symbol, order_type="SELL", quantity=quantity, price=sell_px)
@@ -439,7 +439,7 @@ class OrderExecutionEngine:
                             "actual_exit_price": latest_px,
                             "quantity": quantity,
                             "pnl_pct": final_pnl_pct,
-                            "pnl_usd": round((latest_px - buy_px) * quantity, 2),
+                            "pnl_usd": int((latest_px - buy_px) * quantity),
                             "exit_reason": reason_desc,
                             "mfe_pct": mfe_pct,
                             "mae_pct": mae_pct,
